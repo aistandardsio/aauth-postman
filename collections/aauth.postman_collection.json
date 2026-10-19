@@ -1,0 +1,1135 @@
+{
+  "info": {
+    "_postman_id": "ffa3e2b8-ca75-585c-8896-d4a73810b173",
+    "name": "AAuth",
+    "description": "AAuth agent authorization (draft-hardt-oauth-aauth-protocol-11): five resource access modes, from agent identity to federated authorization, with shared fragments for obtaining agent and person tokens and for user consent.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Agent identity",
+      "description": "The simplest mode: the resource only needs to know which agent is calling. The agent signs every request with its own key and presents its agent token, which binds that key to the agent's identifier. The resource checks the signature and decides on the agent's identity alone. It replaces API keys with cryptographic identity, with no person and no further tokens involved.",
+      "item": [
+        {
+          "id": "agent-identity/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "agent-identity/request",
+          "name": "3. HTTP Sig w/ agent_token",
+          "description": "The agent calls the resource. The request carries an HTTP message signature made with the agent's key, and the agent token travels in the Signature-Key header.\n\nThe agent signs every request with the key in the token's cnf; the verifier checks the signature against that key.\n\nSource: draft-11 §5.3.2, §11.3.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has documents', () => pm.expect(pidlBody).to.have.property(\"documents\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"agent-identity.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"agent-identity.ap_url\")); }",
+              "if (pm.environment.has(\"agent-identity.as_url\")) { pm.variables.set(\"as_url\", pm.environment.get(\"agent-identity.as_url\")); }",
+              "if (pm.environment.has(\"agent-identity.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"agent-identity.ps_url\")); }",
+              "if (pm.environment.has(\"agent-identity.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"agent-identity.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resource-managed access (two-party)",
+      "description": "The resource runs its own authorization: its own login, consent screen or existing OAuth flow. It answers the agent's first request with a 202 asking for user interaction, the person completes the resource's own flow, and the resource hands the agent a session token. The agent sends that token back on later calls, always under its own signature, so the token is useless to anyone else.\n\nSteps between other roles, not sent by this collection:\n\n- 5. Person → Resource: Completes the resource's own login and consent",
+      "item": [
+        {
+          "id": "resource-managed/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "resource-managed/request",
+          "name": "3. HTTP Sig w/ agent_token",
+          "description": "The agent calls the resource, signed with its key and presenting its agent token.\n\nSource: draft-11 §6.2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/data"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header AAuth-Access', () => pm.response.to.have.header(\"AAuth-Access\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has items', () => pm.expect(pidlBody).to.have.property(\"items\"));",
+                  "  pm.collectionVariables.set(\"aauth_access\", pm.response.headers.get(\"AAuth-Access\"));",
+                  "  if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"resource-managed/session-request\"); } else { postman.setNextRequest(\"resource-managed/session-request\"); }",
+                  "} else {",
+                  "  pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "  pm.test('header Location', () => pm.response.to.have.header(\"Location\"));",
+                  "  pm.test('header Retry-After', () => pm.response.to.have.header(\"Retry-After\"));",
+                  "  pm.test('header Cache-Control', () => pm.response.to.have.header(\"Cache-Control\"));",
+                  "  pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));",
+                  "  pm.collectionVariables.set(\"location\", pm.response.headers.get(\"Location\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "resource-managed/poll",
+          "name": "6. GET pending URL",
+          "description": "The agent polls the pending URL, still signing every request with its key.\n\nSource: draft-11 §11.8.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{location}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  const n = Number(pm.collectionVariables.get(\"poll_resource_managed_poll\") || 0) + 1;",
+                  "  pm.collectionVariables.set(\"poll_resource_managed_poll\", n);",
+                  "  pm.test('still pending (attempt ' + n + ')', () => pm.expect(n).to.be.below(30));",
+                  "  if (n < 30) { setTimeout(() => {}, 1000); if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"resource-managed/poll\"); } else { postman.setNextRequest(\"resource-managed/poll\"); } }",
+                  "} else {",
+                  "  pm.collectionVariables.unset(\"poll_resource_managed_poll\");",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header AAuth-Access', () => pm.response.to.have.header(\"AAuth-Access\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has items', () => pm.expect(pidlBody).to.have.property(\"items\"));",
+                  "  pm.collectionVariables.set(\"aauth_access\", pm.response.headers.get(\"AAuth-Access\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "resource-managed/session-request",
+          "name": "8. HTTP Sig w/ agent_token + Authorization: AAuth",
+          "description": "On later calls the agent returns the session token in Authorization: AAuth and includes that header in its signature, so a stolen session token alone is worthless.\n\nThe signature must cover the authorization header, so the session token cannot be replayed as a bearer token.\n\nSource: draft-11 §6.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "AAuth {{aauth_access}}"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/data"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has items', () => pm.expect(pidlBody).to.have.property(\"items\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"resource-managed.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"resource-managed.ap_url\")); }",
+              "if (pm.environment.has(\"resource-managed.as_url\")) { pm.variables.set(\"as_url\", pm.environment.get(\"resource-managed.as_url\")); }",
+              "if (pm.environment.has(\"resource-managed.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"resource-managed.ps_url\")); }",
+              "if (pm.environment.has(\"resource-managed.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"resource-managed.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Person identity",
+      "description": "Federated login for agents. The agent asks its person server for a person token addressed to this resource and presents it instead of its agent token. The resource learns which person the agent acts for, as a directed identifier unique to this resource, and applies its own access control. The person server issues the token but is not in the path of any call.",
+      "item": [
+        {
+          "id": "person-identity/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "person-identity/person-token.request",
+          "name": "3. POST person_token_endpoint (HTTP Sig w/ agent_token)",
+          "description": "The agent asks its person server for a person token for the resource it wants to call. The request is signed with the agent's key and presents the agent token, and the signature covers the body through Content-Digest.\n\nA body sent to a PS must be covered by the signature through Content-Digest and Content-Type (§11.3.3.1). The draft's own example in §7.1 omits them.\n\nSource: draft-11 §7.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/person"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
+                  "pm.test('person_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "person-identity/request",
+          "name": "5. HTTP Sig w/ person_token",
+          "description": "The agent calls the resource presenting the person token in place of its agent token. The token's cnf is the same key that signs the request.\n\nThe person token replaces the agent token in Signature-Key. Its cnf is the same key that signs, so verification works as before.\n\nSource: draft-11 §7.1.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "person"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{person_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has documents', () => pm.expect(pidlBody).to.have.property(\"documents\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"person-identity.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"person-identity.ap_url\")); }",
+              "if (pm.environment.has(\"person-identity.as_url\")) { pm.variables.set(\"as_url\", pm.environment.get(\"person-identity.as_url\")); }",
+              "if (pm.environment.has(\"person-identity.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"person-identity.ps_url\")); }",
+              "if (pm.environment.has(\"person-identity.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"person-identity.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PS authorization (three-party)",
+      "description": "Three-party authorization. The resource has no access server of its own, so it trusts the person server that vouched for the person. The agent asks the resource for access and receives a resource token addressed to its PS. The PS obtains the person's consent and issues an auth token that the resource enforces against the person's identifier and the granted scope.\n\nSteps between other roles, not sent by this collection:\n\n- 9. Agent → Person: Open interaction URL with code\n- 10. Person → Person Server: Review and approve",
+      "item": [
+        {
+          "id": "ps-authorization/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ps-authorization/person-token.request",
+          "name": "3. POST person_token_endpoint (HTTP Sig w/ agent_token)",
+          "description": "The agent asks its person server for a person token for the resource it wants to call. The request is signed with the agent's key and presents the agent token, and the signature covers the body through Content-Digest.\n\nA body sent to a PS must be covered by the signature through Content-Digest and Content-Type (§11.3.3.1). The draft's own example in §7.1 omits them.\n\nSource: draft-11 §7.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/person"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
+                  "pm.test('person_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ps-authorization/authorize",
+          "name": "5. POST authorization_endpoint (HTTP Sig w/ person_token)",
+          "description": "The agent asks the resource's authorization endpoint for the scope it needs, presenting the person token so the resource knows who the access is for.\n\nThe signature does not cover this body: Content-Digest is required only toward PS and AS endpoints, unless the resource asks for it through additional_signature_components.\n\nSource: draft-11 §6.6",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "person"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{person_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"data.read data.write\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{resource_url}}/authorize"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has resource_token', () => pm.expect(pidlBody).to.have.property(\"resource_token\"));",
+                  "pm.test('resource_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"agent_jkt\",\"aud\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"presented_jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"resource_token\", pm.response.json()[\"resource_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ps-authorization/auth-token-request",
+          "name": "7. POST auth_token_endpoint w/ resource_token + presented_token",
+          "description": "The agent brings the resource token to its PS, along with the person token it presented to the resource and a short justification. The PS checks that agent_jkt matches the key that signed this request and that the presented token matches the resource token.\n\nThe PS checks agent_jkt against the key that signed this request (the agent's), and checks presented_token against the resource token's presented_jti, ps and sub.\n\nSource: draft-11 §7.2.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_token\": \"{{resource_token}}\",\n  \"presented_token\": \"{{person_token}}\",\n  \"justification\": \"Summarize this quarter's planning documents\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "  if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"ps-authorization/api-request\"); } else { postman.setNextRequest(\"ps-authorization/api-request\"); }",
+                  "} else {",
+                  "  pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "  pm.test('header Location', () => pm.response.to.have.header(\"Location\"));",
+                  "  pm.test('header Retry-After', () => pm.response.to.have.header(\"Retry-After\"));",
+                  "  pm.test('header Cache-Control', () => pm.response.to.have.header(\"Cache-Control\"));",
+                  "  pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));",
+                  "  pm.collectionVariables.set(\"location\", pm.response.headers.get(\"Location\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ps-authorization/consent.poll",
+          "name": "11. GET pending URL (Prefer: wait)",
+          "description": "Meanwhile the agent polls the pending URL with a signed GET, asking the PS to wait up to 45 seconds for an answer. Once the person approves, the response to this poll carries the result.\n\nPolling switches to GET on the Location URL and does not resend the original body. Prefer: wait asks the PS to hold the response until it can answer.\n\nSource: draft-11 §11.8.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{location}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  const n = Number(pm.collectionVariables.get(\"poll_ps_authorization_consent_poll\") || 0) + 1;",
+                  "  pm.collectionVariables.set(\"poll_ps_authorization_consent_poll\", n);",
+                  "  pm.test('still pending (attempt ' + n + ')', () => pm.expect(n).to.be.below(30));",
+                  "  if (n < 30) { setTimeout(() => {}, 1000); if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"ps-authorization/consent.poll\"); } else { postman.setNextRequest(\"ps-authorization/consent.poll\"); } }",
+                  "} else {",
+                  "  pm.collectionVariables.unset(\"poll_ps_authorization_consent_poll\");",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ps-authorization/api-request",
+          "name": "13. GET /api/documents (HTTP Sig w/ auth_token)",
+          "description": "The agent calls the API presenting the auth token, signed with the same key.\n\nThe resource checks iss, aud, cnf against the signing key, sub and scope.\n\nSource: draft-11 §9.4.2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "auth"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has documents', () => pm.expect(pidlBody).to.have.property(\"documents\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"ps-authorization.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"ps-authorization.ap_url\")); }",
+              "if (pm.environment.has(\"ps-authorization.as_url\")) { pm.variables.set(\"as_url\", pm.environment.get(\"ps-authorization.as_url\")); }",
+              "if (pm.environment.has(\"ps-authorization.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"ps-authorization.ps_url\")); }",
+              "if (pm.environment.has(\"ps-authorization.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"ps-authorization.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Federated authorization (four-party)",
+      "description": "Four-party authorization. The resource has its own access server that evaluates resource policy. The resource token names that access server, so the person server, after obtaining consent, federates with it, presenting the resource token, the agent token and the person token. The access server issues the auth token, which travels back through the PS to the agent.\n\nSteps between other roles, not sent by this collection:\n\n- 9. Agent → Person: Open interaction URL with code\n- 10. Person → Person Server: Review and approve\n- 12. Person Server → Access Server: POST auth_token_endpoint w/ resource_token (HTTP Sig w/ jwks_uri)",
+      "item": [
+        {
+          "id": "federated-authorization/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "federated-authorization/person-token.request",
+          "name": "3. POST person_token_endpoint (HTTP Sig w/ agent_token)",
+          "description": "The agent asks its person server for a person token for the resource it wants to call. The request is signed with the agent's key and presents the agent token, and the signature covers the body through Content-Digest.\n\nA body sent to a PS must be covered by the signature through Content-Digest and Content-Type (§11.3.3.1). The draft's own example in §7.1 omits them.\n\nSource: draft-11 §7.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/person"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
+                  "pm.test('person_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "federated-authorization/authorize",
+          "name": "5. POST authorization_endpoint (HTTP Sig w/ person_token)",
+          "description": "The agent asks the resource's authorization endpoint for the scope it needs, presenting the person token.\n\nThe signature does not cover this body: Content-Digest is required only toward PS and AS endpoints, unless the resource asks for it through additional_signature_components.\n\nSource: draft-11 §6.6",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "person"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{person_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"data.read data.write\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{resource_url}}/authorize"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has resource_token', () => pm.expect(pidlBody).to.have.property(\"resource_token\"));",
+                  "pm.test('resource_token claims', () => {",
+                  "  const payload = JSON.parse(atob(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.expect(payload).to.include.keys([\"agent_jkt\",\"aud\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"presented_jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"resource_token\", pm.response.json()[\"resource_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "federated-authorization/auth-token-request",
+          "name": "7. POST auth_token_endpoint w/ resource_token + presented_token",
+          "description": "The agent sends the resource token and the presented person token to its PS, exactly as in three-party access. The aud tells the PS it must federate.\n\nThe PS checks agent_jkt against the key that signed this request (the agent's), and checks presented_token against the resource token's presented_jti, ps and sub.\n\nSource: draft-11 §7.2.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_token\": \"{{resource_token}}\",\n  \"presented_token\": \"{{person_token}}\",\n  \"justification\": \"Summarize this quarter's planning documents\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "  if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"federated-authorization/api-request\"); } else { postman.setNextRequest(\"federated-authorization/api-request\"); }",
+                  "} else {",
+                  "  pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "  pm.test('header Location', () => pm.response.to.have.header(\"Location\"));",
+                  "  pm.test('header Retry-After', () => pm.response.to.have.header(\"Retry-After\"));",
+                  "  pm.test('header Cache-Control', () => pm.response.to.have.header(\"Cache-Control\"));",
+                  "  pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));",
+                  "  pm.collectionVariables.set(\"location\", pm.response.headers.get(\"Location\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "federated-authorization/consent.poll",
+          "name": "11. GET pending URL (Prefer: wait)",
+          "description": "Meanwhile the agent polls the pending URL with a signed GET, asking the PS to wait up to 45 seconds for an answer. Once the person approves, the response to this poll carries the result.\n\nPolling switches to GET on the Location URL and does not resend the original body. Prefer: wait asks the PS to hold the response until it can answer.\n\nSource: draft-11 §11.8.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{location}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  const n = Number(pm.collectionVariables.get(\"poll_federated_authorization_consent_poll\") || 0) + 1;",
+                  "  pm.collectionVariables.set(\"poll_federated_authorization_consent_poll\", n);",
+                  "  pm.test('still pending (attempt ' + n + ')', () => pm.expect(n).to.be.below(30));",
+                  "  if (n < 30) { setTimeout(() => {}, 1000); if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"federated-authorization/consent.poll\"); } else { postman.setNextRequest(\"federated-authorization/consent.poll\"); } }",
+                  "} else {",
+                  "  pm.collectionVariables.unset(\"poll_federated_authorization_consent_poll\");",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "federated-authorization/api-request",
+          "name": "15. GET /api/documents (HTTP Sig w/ auth_token)",
+          "description": "The agent calls the API presenting the auth token, signed with its key.\n\nSource: draft-11 §9.4.2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "auth"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/api/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has documents', () => pm.expect(pidlBody).to.have.property(\"documents\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"federated-authorization.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"federated-authorization.ap_url\")); }",
+              "if (pm.environment.has(\"federated-authorization.as_url\")) { pm.variables.set(\"as_url\", pm.environment.get(\"federated-authorization.as_url\")); }",
+              "if (pm.environment.has(\"federated-authorization.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"federated-authorization.ps_url\")); }",
+              "if (pm.environment.has(\"federated-authorization.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"federated-authorization.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "ap_url",
+      "value": "https://agent.example"
+    },
+    {
+      "key": "as_url",
+      "value": "https://as.resource.example"
+    },
+    {
+      "key": "ps_url",
+      "value": "https://ps.example"
+    },
+    {
+      "key": "resource_url",
+      "value": "https://resource.example"
+    },
+    {
+      "key": "signer_url",
+      "value": "http://127.0.0.1:8099"
+    }
+  ]
+}
