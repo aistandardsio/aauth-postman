@@ -1,0 +1,13 @@
+# Newman and Postman local output
+newman/
+*.postman_globals.json
+*.local.postman_environment.json
+
+# Sandbox state (CA private key, role keys)
+.aauth-sandbox/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+node_modules/
