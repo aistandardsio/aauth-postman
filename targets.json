@@ -1,0 +1,23 @@
+{
+  "sandbox": {
+    "signer": "http://127.0.0.1:8099",
+    "roles": {
+      "ap": "https://ap.aauth.test",
+      "ps": "https://ps.aauth.test",
+      "resource": "https://resource.aauth.test",
+      "as": "https://as.aauth.test"
+    },
+    "scenarios": {
+      "federated-authorization": {"resource": "https://docs.aauth.test"}
+    }
+  },
+  "mock": {
+    "roles": {
+      "ap": "{{mock_url}}",
+      "ps": "{{mock_url}}",
+      "resource": "{{mock_url}}",
+      "as": "{{mock_url}}"
+    },
+    "variables": {"mock_url": "https://replace-with-your-mock-id.mock.pstmn.io"}
+  }
+}
