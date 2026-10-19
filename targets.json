@@ -8,7 +8,18 @@
       "as": "https://as.aauth.test"
     },
     "scenarios": {
-      "federated-authorization": {"resource": "https://docs.aauth.test"}
+      "federated-authorization": {
+        "resource": "https://docs.aauth.test"
+      }
+    }
+  },
+  "petstore": {
+    "signer": "http://127.0.0.1:8099",
+    "roles": {
+      "ap": "https://ap.aauth.test",
+      "ps": "https://ps.aauth.test",
+      "resource": "https://petstore.aauth.test",
+      "as": "https://as.aauth.test"
     }
   },
   "mock": {
@@ -18,6 +29,8 @@
       "resource": "{{mock_url}}",
       "as": "{{mock_url}}"
     },
-    "variables": {"mock_url": "https://replace-with-your-mock-id.mock.pstmn.io"}
+    "variables": {
+      "mock_url": "https://replace-with-your-mock-id.mock.pstmn.io"
+    }
   }
 }

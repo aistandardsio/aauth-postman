@@ -1,0 +1,543 @@
+{
+  "info": {
+    "_postman_id": "5f3886e7-9dd5-5159-909c-0e8088f35f00",
+    "name": "AAuth Petstore",
+    "description": "The Swagger Petstore as an AAuth resource (draft-hardt-oauth-aauth-protocol-11): each operation asks the agent for what it needs. Browsing needs the agent's identity; placing an order needs the person's approval for write:orders.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Browse pets",
+      "description": "The agent looks for available pets. Browsing the catalog needs only the agent's identity: the request is signed with the agent's key and presents its agent token, and the Petstore answers without asking who the person is.",
+      "item": [
+        {
+          "id": "browse-pets/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "browse-pets/find-pets",
+          "name": "3. GET /v2/pet/findByStatus (HTTP Sig w/ agent_token)",
+          "description": "The agent asks for available pets, signing the request and presenting its agent token.\n\nSource: draft-11 §6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/v2/pet/findByStatus?status=available"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"browse-pets.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"browse-pets.ap_url\")); }",
+              "if (pm.environment.has(\"browse-pets.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"browse-pets.ps_url\")); }",
+              "if (pm.environment.has(\"browse-pets.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"browse-pets.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Order a pet",
+      "description": "The agent orders a pet for the person. The Petstore needs to know who the order is for and that the person approved it, so it challenges twice: first for a person token, then for an auth token granting write:orders, which the person approves at their person server.\n\nSteps between other roles, not sent by this collection:\n\n- 11. Agent → Person: Open interaction URL with code\n- 12. Person → Person Server: Review and approve",
+      "item": [
+        {
+          "id": "order-a-pet/agent-token.attest",
+          "name": "1. Request agent token (web app)",
+          "description": "The agent generates a fresh ephemeral key and asks its agent provider for an agent token. It signs the request with the new key, and the Signature-Key header carries a naming JWT signed by its durable key, which vouches for the new key. The agent provider recognizes the durable key from enrollment, checks that the new key signed the request, and applies its policy.\n\nThis is the web app pattern from the AAuth Bootstrap guidance; the endpoint path is the agent provider's own. Enrollment came first: the user signed in and the agent registered its durable key. Other platforms differ: a mobile app keeps its durable key in the Secure Enclave or StrongBox and usually attests it with App Attest or Play Integrity at enrollment; a self-hosted agent publishes its own JWKS and issues its own agent token, with no request at all; workload identity is not yet covered by the guidance.\n\nSource: draft-hardt-aauth-bootstrap-02 §8.1, §10.1; draft-hardt-httpbis-signature-key-09 §3.5",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "jkt-jwt"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ap_url}}/agent-token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('agent_token claims', () => {",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
+                  "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/order",
+          "name": "3. POST /v2/store/order (HTTP Sig w/ agent_token)",
+          "description": "The agent places the order, presenting its agent token as it would for browsing.\n\nSource: draft-11 §6",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": 1,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{resource_url}}/v2/store/order"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/person-token.request",
+          "name": "5. POST person_token_endpoint (HTTP Sig w/ agent_token)",
+          "description": "The agent asks its person server for a person token for the resource it wants to call. The request is signed with the agent's key and presents the agent token, and the signature covers the body through Content-Digest.\n\nA body sent to a PS must be covered by the signature through Content-Digest and Content-Type (§11.3.3.1). The draft's own example in §7.1 omits them.\n\nSource: draft-11 §7.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"{{resource_url}}\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/person"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
+                  "pm.test('person_token claims', () => {",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
+                  "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
+                  "});",
+                  "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/order-as-person",
+          "name": "7. POST /v2/store/order (HTTP Sig w/ person_token)",
+          "description": "The agent retries, presenting the person token in place of its agent token.\n\nSource: draft-11 §6",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "person"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{person_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": 1,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{resource_url}}/v2/store/order"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
+                  "pm.collectionVariables.set(\"resource_token\", ((pm.response.headers.get(\"AAuth-Requirement\") || \"\").match(/(?:^|;)\\s*resource-token=\"([^\"]*)\"/) || [])[1]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/auth-token-request",
+          "name": "9. POST auth_token_endpoint w/ resource_token + presented_token",
+          "description": "The agent brings the resource token to its person server, with the person token it presented and a short reason. The person server checks that the resource token names this agent's key and the person token, and asks the person.\n\nThe PS checks agent_jkt against the key that signed this request (the agent's), and checks presented_token against the resource token's presented_jti, ps and sub.\n\nSource: draft-11 §7.2.1, §11.3.3.1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_token\": \"{{resource_token}}\",\n  \"presented_token\": \"{{person_token}}\",\n  \"justification\": \"Order Fido, as the person asked\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{ps_url}}/token"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "  if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"order-a-pet/order-with-auth\"); } else { postman.setNextRequest(\"order-a-pet/order-with-auth\"); }",
+                  "} else {",
+                  "  pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "  pm.test('header Location', () => pm.response.to.have.header(\"Location\"));",
+                  "  pm.test('header Retry-After', () => pm.response.to.have.header(\"Retry-After\"));",
+                  "  pm.test('header Cache-Control', () => pm.response.to.have.header(\"Cache-Control\"));",
+                  "  pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));",
+                  "  pm.collectionVariables.set(\"location\", pm.response.headers.get(\"Location\"));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/consent.poll",
+          "name": "13. GET pending URL (Prefer: wait)",
+          "description": "Meanwhile the agent polls the pending URL with a signed GET, asking the PS to wait up to 45 seconds for an answer. Once the person approves, the response to this poll carries the result.\n\nPolling switches to GET on the Location URL and does not resend the original body. Prefer: wait asks the PS to hold the response until it can answer.\n\nSource: draft-11 §11.8.3",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Prefer",
+                "value": "wait=45"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "agent"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{agent_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{location}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "  const n = Number(pm.collectionVariables.get(\"poll_order_a_pet_consent_poll\") || 0) + 1;",
+                  "  pm.collectionVariables.set(\"poll_order_a_pet_consent_poll\", n);",
+                  "  pm.test('still pending (attempt ' + n + ')', () => pm.expect(n).to.be.below(30));",
+                  "  if (n < 30) { setTimeout(() => {}, 1000); if (pm.execution && pm.execution.setNextRequest) { pm.execution.setNextRequest(\"order-a-pet/consent.poll\"); } else { postman.setNextRequest(\"order-a-pet/consent.poll\"); } }",
+                  "} else {",
+                  "  pm.collectionVariables.unset(\"poll_order_a_pet_consent_poll\");",
+                  "  pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "  pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "  const pidlBody = pm.response.json();",
+                  "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
+                  "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
+                  "  pm.test('auth_token claims', () => {",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
+                  "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
+                  "  });",
+                  "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/order-with-auth",
+          "name": "15. POST /v2/store/order (HTTP Sig w/ auth_token)",
+          "description": "The agent retries once more, presenting the auth token.\n\nSource: draft-11 §6",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Sandbox-Present",
+                "value": "auth"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"petId\": 1,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{signer_url}}/{{resource_url}}/v2/store/order"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has complete', () => pm.expect(pidlBody).to.have.property(\"complete\"));",
+                  "pm.test('body has id', () => pm.expect(pidlBody).to.have.property(\"id\"));",
+                  "pm.test('body has petId', () => pm.expect(pidlBody).to.have.property(\"petId\"));",
+                  "pm.test('body has quantity', () => pm.expect(pidlBody).to.have.property(\"quantity\"));",
+                  "pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "order-a-pet/check-order",
+          "name": "17. GET /v2/store/order/1 (HTTP Sig w/ auth_token)",
+          "description": "The agent checks the order. The auth token also proves the person, which is all reading an order needs.\n\nSource: draft-11 §6",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Sandbox-Present",
+                "value": "auth"
+              },
+              {
+                "key": "X-Sandbox-Token",
+                "value": "{{auth_token}}"
+              }
+            ],
+            "url": "{{signer_url}}/{{resource_url}}/v2/store/order/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('header Content-Type', () => pm.response.to.have.header(\"Content-Type\"));",
+                  "const pidlBody = pm.response.json();",
+                  "pm.test('body has complete', () => pm.expect(pidlBody).to.have.property(\"complete\"));",
+                  "pm.test('body has id', () => pm.expect(pidlBody).to.have.property(\"id\"));",
+                  "pm.test('body has petId', () => pm.expect(pidlBody).to.have.property(\"petId\"));",
+                  "pm.test('body has quantity', () => pm.expect(pidlBody).to.have.property(\"quantity\"));",
+                  "pm.test('body has status', () => pm.expect(pidlBody).to.have.property(\"status\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// An environment can point a role at another server for this scenario.",
+              "if (pm.environment.has(\"order-a-pet.ap_url\")) { pm.variables.set(\"ap_url\", pm.environment.get(\"order-a-pet.ap_url\")); }",
+              "if (pm.environment.has(\"order-a-pet.ps_url\")) { pm.variables.set(\"ps_url\", pm.environment.get(\"order-a-pet.ps_url\")); }",
+              "if (pm.environment.has(\"order-a-pet.resource_url\")) { pm.variables.set(\"resource_url\", pm.environment.get(\"order-a-pet.resource_url\")); }"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "ap_url",
+      "value": "https://agent.example"
+    },
+    {
+      "key": "ps_url",
+      "value": "https://ps.example"
+    },
+    {
+      "key": "resource_url",
+      "value": "https://resource.example"
+    },
+    {
+      "key": "signer_url",
+      "value": "http://127.0.0.1:8099"
+    }
+  ]
+}
