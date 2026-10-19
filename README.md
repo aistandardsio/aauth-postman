@@ -18,21 +18,18 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 
 ## Quick Start
 
-The collection and the sandbox are in development. Once released:
+With Docker, and an aauth-go checkout next to this repository (`../aauth-go`) until the sandbox image is published:
 
 ```bash
-# Start every AAuth role with a local certificate authority
-aauth-sandbox ca init
-aauth-sandbox serve
-
-# Trust the sandbox CA in Postman: Settings > Certificates > CA certificates
-aauth-sandbox ca export > aauth-sandbox-ca.pem
-
-# Start the signing helper Postman sends requests through
-aauth-sandbox sign
+docker compose up -d --wait                     # the AAuth sandbox: every role plus the signing helper
+docker compose --profile test run --rm newman   # run every access mode with Newman
 ```
 
-Then import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json` into Postman and run a folder.
+Or `make test-docker`, which does both.
+
+In Postman, import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json`, select the environment, and run a folder. Postman talks only to the signing helper at `http://127.0.0.1:8099`, so no hosts entries or certificates are needed.
+
+Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see [docs/setup.md](docs/setup.md).
 
 ## Exploring Without Running Anything
 
