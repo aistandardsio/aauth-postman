@@ -3,12 +3,14 @@
 #
 #   docker compose up -d --wait                    # start the sandbox and the Petstore
 #   docker compose --profile test run --rm newman  # run every folder
+#   docker compose run --rm omniagent              # chat with omniagent as the agent
 #
 # The sandbox serves the agent provider, person server, access server and
 # its demo resources, and fronts the Petstore at https://petstore.aauth.test.
 # Until the images are published, they are built from sibling checkouts:
-# aauth-go (AAUTH_GO_DIR, default ../aauth-go) and petstore (PETSTORE_DIR,
-# default ../../grokify/petstore).
+# aauth-go (AAUTH_GO_DIR, default ../aauth-go), petstore (PETSTORE_DIR,
+# default ../../grokify/petstore) and omniagent (OMNIAGENT_DIR, default
+# ../../plexusone/omniagent).
 
 name: aauth-postman
 
@@ -77,6 +79,31 @@ services:
       - environments/sandbox.postman_environment.json
       - --env-var
       - signer_url=http://sandbox:8099
+
+  omniagent:
+    image: aauth-petstore:dev
+    build:
+      context: ${OMNIAGENT_DIR:-../../plexusone/omniagent}
+      dockerfile: examples/aauth-petstore/Dockerfile
+      additional_contexts:
+        aauth-go: ${AAUTH_GO_DIR:-../aauth-go}
+    profiles: [omniagent]
+    depends_on:
+      petstore:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    volumes:
+      - state:/state:ro
+    environment:
+      AAUTH_CA_FILE: /state/ca.pem
+      # The model: omniagent's settings, passed through from your shell.
+      OMNIAGENT_AGENT_PROVIDER: ${OMNIAGENT_AGENT_PROVIDER:-anthropic}
+      OMNIAGENT_AGENT_MODEL: ${OMNIAGENT_AGENT_MODEL:-}
+      OMNIAGENT_AGENT_BASE_URL: ${OMNIAGENT_AGENT_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
 
 volumes:
   state:
