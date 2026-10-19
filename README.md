@@ -12,8 +12,8 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 
 | Path | Contents |
 |------|----------|
-| `collections/` | Generated collections: signed (against the sandbox) and mock (saved example responses) |
-| `environments/` | Generated environments: local sandbox, Docker, minikube and Postman mock server |
+| `collections/` | Generated collections: AAuth's access modes, signed (against the sandbox) and mock (saved example responses), and the Petstore |
+| `environments/` | Generated environments: the sandbox, the Petstore behind it, and a Postman mock server |
 | `docs/` | Setup and workshop guides |
 
 ## Quick Start
@@ -21,15 +21,32 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 With Docker, and an aauth-go checkout next to this repository (`../aauth-go`) until the sandbox image is published:
 
 ```bash
-docker compose up -d --wait                     # the AAuth sandbox: every role plus the signing helper
+docker compose up -d --wait                     # the AAuth sandbox (every role and the signing helper) and the Petstore
 docker compose --profile test run --rm newman   # run every access mode with Newman
 ```
 
-Or `make test-docker`, which does both.
+Or `make test-docker`, which also runs the Petstore collection.
 
 In Postman, import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json`, select the environment, and run a folder. Postman talks only to the signing helper at `http://127.0.0.1:8099`, so no hosts entries or certificates are needed.
 
 Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see [docs/setup.md](docs/setup.md).
+
+## The Petstore, Two Ways
+
+The [Swagger Petstore](https://github.com/grokify/petstore) runs next to the sandbox as an AAuth resource at `https://petstore.aauth.test`. Browsing needs only the agent's identity; placing an order needs the person's approval for `write:orders`. Two demos play the agent against the same servers, so they send the same messages:
+
+| Demo | The agent | Run it |
+|------|-----------|--------|
+| Postman | Postman, one step per request | `collections/petstore.postman_collection.json` with `environments/petstore.postman_environment.json`, or `docker compose --profile test run --rm newman-petstore` |
+| omniagent | [omniagent](https://github.com/plexusone/omniagent), an AI agent whose tools are the Petstore's operations | `ANTHROPIC_API_KEY=... docker compose run --rm omniagent` |
+
+In the Postman folder each challenge is a request you can inspect: the order is refused with `requirement=person-token`, then with `requirement=auth-token` and a resource token, the person server asks the person to approve, and the order goes through with the auth token. omniagent does the same steps inside its HTTP client and prints the approval link. Compare them in the sandbox's trace:
+
+```bash
+docker compose exec sandbox aauth-sandbox trace --state /state
+```
+
+The omniagent container also needs an omniagent checkout next to this one (`../../plexusone/omniagent`), and the Petstore a petstore checkout (`../../grokify/petstore`), until their images are published.
 
 ## Exploring Without Running Anything
 
