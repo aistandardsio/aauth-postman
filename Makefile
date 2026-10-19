@@ -5,7 +5,7 @@ OUT := $(CURDIR)
 PIDL := cd $(PIDL_DIR) && go run ./cmd/pidl
 PROTOCOL := aauth_protocol
 
-.PHONY: generate run-sandbox
+.PHONY: generate run-sandbox up test-docker down
 
 generate:
 	$(PIDL) generate -f postman --signer aauth-sandbox -o $(OUT)/collections/aauth.postman_collection.json $(PROTOCOL)
@@ -19,3 +19,14 @@ SIGNER_URL ?= http://127.0.0.1:8099
 
 run-sandbox:
 	npx newman@6 run collections/aauth.postman_collection.json -e environments/sandbox.postman_environment.json --env-var signer_url=$(SIGNER_URL)
+
+# Start the sandbox in Docker, run the collection with Newman in Docker,
+# and stop it again.
+up:
+	docker compose up -d --build --wait
+
+test-docker: up
+	docker compose --profile test run --rm newman
+
+down:
+	docker compose down -v
