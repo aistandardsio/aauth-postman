@@ -1,10 +1,14 @@
-# The AAuth sandbox and a Newman run of the collection against it.
+# The AAuth sandbox, the Petstore as an AAuth resource behind it, and a
+# Newman run of the collection against them.
 #
-#   docker compose up -d --wait                  # start the sandbox
+#   docker compose up -d --wait                    # start the sandbox and the Petstore
 #   docker compose --profile test run --rm newman  # run every folder
 #
-# Until the sandbox image is published, it is built from a sibling
-# aauth-go checkout (AAUTH_GO_DIR, default ../aauth-go).
+# The sandbox serves the agent provider, person server, access server and
+# its demo resources, and fronts the Petstore at https://petstore.aauth.test.
+# Until the images are published, they are built from sibling checkouts:
+# aauth-go (AAUTH_GO_DIR, default ../aauth-go) and petstore (PETSTORE_DIR,
+# default ../../grokify/petstore).
 
 name: aauth-postman
 
@@ -19,10 +23,37 @@ services:
       # themselves for a browser. Loopback only: the helper signs anything.
       - "127.0.0.1:${SIGNER_PORT:-8099}:8099"
       - "127.0.0.1:${SANDBOX_HTTPS_PORT:-443}:443"
+    command: ["serve", "--state", "/state", "--signer", "0.0.0.0:8099", "--signer-any-interface",
+              "--upstream", "petstore=http://petstore:8080"]
     volumes:
       - state:/state
+    networks:
+      default:
+        # Containers reach every role, and the Petstore, by its identifier.
+        aliases: [ap.aauth.test, ps.aauth.test, as.aauth.test, resource.aauth.test, docs.aauth.test, petstore.aauth.test]
     healthcheck:
       test: ["CMD", "aauth-sandbox", "health", "--state", "/state", "--signer", "127.0.0.1:8099"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  petstore:
+    image: petstore-server:dev
+    build:
+      context: ${PETSTORE_DIR:-../../grokify/petstore}
+      additional_contexts:
+        aauth-go: ${AAUTH_GO_DIR:-../aauth-go}
+    command: ["--listen", ":8080", "--auth", "aauth",
+              "--url", "https://petstore.aauth.test",
+              "--trust", "https://ps.aauth.test",
+              "--ca-file", "/state/ca.pem"]
+    volumes:
+      - state:/state:ro
+    depends_on:
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/petstore-server", "health", "--addr", "127.0.0.1:8080"]
       interval: 2s
       timeout: 5s
       retries: 30
@@ -32,6 +63,8 @@ services:
     profiles: [test]
     depends_on:
       sandbox:
+        condition: service_healthy
+      petstore:
         condition: service_healthy
     working_dir: /etc/newman
     volumes:
