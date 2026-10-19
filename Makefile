@@ -24,13 +24,16 @@ run-sandbox:
 	npx newman@6 run collections/aauth.postman_collection.json -e environments/sandbox.postman_environment.json --env-var signer_url=$(SIGNER_URL)
 	npx newman@6 run collections/petstore.postman_collection.json -e environments/petstore.postman_environment.json --env-var signer_url=$(SIGNER_URL)
 
-# Start the sandbox in Docker, run the collection with Newman in Docker,
-# and stop it again.
+# Start the sandbox and the Petstore in Docker and run both collections
+# with Newman in Docker. The Petstore is restarted first, so its pets are
+# available to order again.
 up:
 	docker compose up -d --build --wait
 
 test-docker: up
+	docker compose up -d --wait --force-recreate petstore
 	docker compose --profile test run --rm newman
+	docker compose --profile test run --rm newman-petstore
 
 down:
 	docker compose down -v
