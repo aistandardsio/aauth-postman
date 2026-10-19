@@ -49,7 +49,7 @@
                   "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('agent_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
@@ -151,7 +151,7 @@
                   "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('agent_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
@@ -348,7 +348,7 @@
                   "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('agent_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
@@ -379,7 +379,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "raw": "{\n  \"resource\": \"{{resource_url}}\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -400,7 +400,7 @@
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
                   "pm.test('person_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
@@ -502,7 +502,7 @@
                   "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('agent_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
@@ -533,7 +533,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "raw": "{\n  \"resource\": \"{{resource_url}}\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -554,7 +554,7 @@
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
                   "pm.test('person_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
@@ -605,7 +605,7 @@
                   "const pidlBody = pm.response.json();",
                   "pm.test('body has resource_token', () => pm.expect(pidlBody).to.have.property(\"resource_token\"));",
                   "pm.test('resource_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"agent_jkt\",\"aud\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"presented_jti\",\"ps\",\"scope\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"resource_token\", pm.response.json()[\"resource_token\"]);"
@@ -662,7 +662,7 @@
                   "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
                   "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "  pm.test('auth_token claims', () => {",
-                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
                   "  });",
                   "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
@@ -724,7 +724,7 @@
                   "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
                   "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "  pm.test('auth_token claims', () => {",
-                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
                   "  });",
                   "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
@@ -827,7 +827,7 @@
                   "pm.test('body has agent_token', () => pm.expect(pidlBody).to.have.property(\"agent_token\"));",
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('agent_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"agent_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"agent_token\", pm.response.json()[\"agent_token\"]);"
@@ -858,7 +858,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"resource\": \"https://resource.example\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
+              "raw": "{\n  \"resource\": \"{{resource_url}}\",\n  \"capabilities\": [\n    \"interaction\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -879,7 +879,7 @@
                   "pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "pm.test('body has person_token', () => pm.expect(pidlBody).to.have.property(\"person_token\"));",
                   "pm.test('person_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"person_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"person_token\", pm.response.json()[\"person_token\"]);"
@@ -930,7 +930,7 @@
                   "const pidlBody = pm.response.json();",
                   "pm.test('body has resource_token', () => pm.expect(pidlBody).to.have.property(\"resource_token\"));",
                   "pm.test('resource_token claims', () => {",
-                  "  const payload = JSON.parse(atob(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const payload = JSON.parse(Buffer.from(String(pidlBody[\"resource_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "  pm.expect(payload).to.include.keys([\"agent_jkt\",\"aud\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"presented_jti\",\"ps\",\"scope\",\"sub\"]);",
                   "});",
                   "pm.collectionVariables.set(\"resource_token\", pm.response.json()[\"resource_token\"]);"
@@ -987,7 +987,7 @@
                   "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
                   "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "  pm.test('auth_token claims', () => {",
-                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
                   "  });",
                   "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",
@@ -1049,7 +1049,7 @@
                   "  pm.test('body has auth_token', () => pm.expect(pidlBody).to.have.property(\"auth_token\"));",
                   "  pm.test('body has expires_in', () => pm.expect(pidlBody).to.have.property(\"expires_in\"));",
                   "  pm.test('auth_token claims', () => {",
-                  "    const payload = JSON.parse(atob(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "    const payload = JSON.parse(Buffer.from(String(pidlBody[\"auth_token\"]).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));",
                   "    pm.expect(payload).to.include.keys([\"aud\",\"cnf\",\"dwk\",\"exp\",\"iat\",\"iss\",\"jti\",\"ps\",\"scope\",\"sub\"]);",
                   "  });",
                   "  pm.collectionVariables.set(\"auth_token\", pm.response.json()[\"auth_token\"]);",

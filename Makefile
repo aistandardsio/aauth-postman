@@ -13,6 +13,9 @@ generate:
 	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target sandbox -o $(OUT)/environments/sandbox.postman_environment.json $(PROTOCOL)
 	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target mock -o $(OUT)/environments/mock.postman_environment.json $(PROTOCOL)
 
-# Run every folder against a running sandbox (aauth-sandbox serve).
+# Run every folder against a running sandbox (aauth-sandbox serve). Set
+# SIGNER_URL when the signing helper runs on another port.
+SIGNER_URL ?= http://127.0.0.1:8099
+
 run-sandbox:
-	npx newman@6 run collections/aauth.postman_collection.json -e environments/sandbox.postman_environment.json
+	npx newman@6 run collections/aauth.postman_collection.json -e environments/sandbox.postman_environment.json --env-var signer_url=$(SIGNER_URL)
