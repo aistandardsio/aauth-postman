@@ -14,7 +14,7 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 |------|----------|
 | `collections/` | Generated collections: AAuth's access modes, signed (against the sandbox) and mock (saved example responses), and the Petstore |
 | `environments/` | Generated environments: the sandbox, the Petstore behind it, and a Postman mock server |
-| `docs/` | Setup and workshop guides |
+| `docs/` | Setup guide and [interop testing runbook](docs/interop.md) |
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ Or `make test-docker`, which also runs the Petstore collection.
 
 In Postman, import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json`, select the environment, and run a folder. Postman talks only to the signing helper at `http://127.0.0.1:8099`, so no hosts entries or certificates are needed.
 
-Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see [docs/setup.md](docs/setup.md).
+Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see [docs/setup.md](docs/setup.md). To test an agent, resource or person server of your own, see the [interop testing runbook](docs/interop.md). Every sandbox option is in the [aauth-go sandbox guide](https://aauth-dev.github.io/aauth-go/guides/sandbox/).
 
 ## The Petstore, Two Ways
 
