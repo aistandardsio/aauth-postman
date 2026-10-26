@@ -26,7 +26,13 @@ services:
       # themselves for a browser. Loopback only: the helper signs anything.
       - "127.0.0.1:${SIGNER_PORT:-8099}:8099"
       - "127.0.0.1:${SANDBOX_HTTPS_PORT:-443}:443"
-    command: ["serve", "--state", "/state", "--signer", "0.0.0.0:8099", "--signer-any-interface",
+    # Replaces the image's command, so it repeats the listen options. The
+    # roles and the helper listen on every interface inside the container
+    # (the ports above publish them on the host's loopback only), and the
+    # helper answers Newman, which calls it as "sandbox".
+    command: ["serve", "--state", "/state",
+              "--listen", "0.0.0.0:443", "--listen-any-interface",
+              "--signer", "0.0.0.0:8099", "--signer-any-interface", "--signer-host", "sandbox",
               "--upstream", "petstore=http://petstore:8080"]
     volumes:
       - state:/state
