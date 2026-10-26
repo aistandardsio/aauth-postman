@@ -8,9 +8,10 @@
 #
 # The sandbox serves the agent provider, person server, access server and
 # its demo resources, and fronts the Petstore at https://petstore.aauth.test.
-# Until the images are published, they are built from sibling checkouts:
-# aauth-go (AAUTH_GO_DIR, default ../aauth-go), petstore (PETSTORE_DIR,
-# default ../../grokify/petstore) and omniagent (OMNIAGENT_DIR, default
+# Until the images are published, they are built from sibling checkouts in
+# the layout ~/go/src/github.com/<org>/<repo>: aauth-go (AAUTH_GO_DIR, default
+# ../../aauth-dev/aauth-go), petstore (PETSTORE_DIR, default
+# ../../grokify/petstore) and omniagent (OMNIAGENT_DIR, default
 # ../../plexusone/omniagent).
 
 name: aauth-postman
@@ -19,7 +20,7 @@ services:
   sandbox:
     image: aauth-sandbox:dev
     build:
-      context: ${AAUTH_GO_DIR:-../aauth-go}
+      context: ${AAUTH_GO_DIR:-../../aauth-dev/aauth-go}
       dockerfile: deploy/docker/Dockerfile
     ports:
       # The signing helper Postman sends requests through, and the roles
@@ -50,8 +51,6 @@ services:
     image: petstore-server:dev
     build:
       context: ${PETSTORE_DIR:-../../grokify/petstore}
-      additional_contexts:
-        aauth-go: ${AAUTH_GO_DIR:-../aauth-go}
     command: ["--listen", ":8080", "--auth", "aauth",
               "--url", "https://petstore.aauth.test",
               "--trust", "https://ps.aauth.test",
@@ -110,8 +109,6 @@ services:
     build:
       context: ${OMNIAGENT_DIR:-../../plexusone/omniagent}
       dockerfile: examples/aauth-petstore/Dockerfile
-      additional_contexts:
-        aauth-go: ${AAUTH_GO_DIR:-../aauth-go}
     profiles: [omniagent]
     depends_on:
       petstore:

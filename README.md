@@ -18,7 +18,7 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 
 ## Quick Start
 
-With Docker, and an aauth-go checkout next to this repository (`../aauth-go`) until the sandbox image is published:
+With Docker, and an aauth-go checkout at `../../aauth-dev/aauth-go` (the `~/go/src/github.com/<org>/<repo>` layout) until the sandbox image is published:
 
 ```bash
 docker compose up -d --wait                     # the AAuth sandbox (every role and the signing helper) and the Petstore
