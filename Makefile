@@ -6,7 +6,7 @@ PIDL := cd $(PIDL_DIR) && go run ./cmd/pidl
 PROTOCOL := aauth_protocol
 PETSTORE := aauth_petstore
 
-.PHONY: generate run-sandbox up test-docker down
+.PHONY: generate run-sandbox up up-petstore test-docker down
 
 generate:
 	$(PIDL) generate -f postman --signer aauth-sandbox -o $(OUT)/collections/aauth.postman_collection.json $(PROTOCOL)
@@ -24,16 +24,23 @@ run-sandbox:
 	npx newman@6 run collections/aauth.postman_collection.json -e environments/sandbox.postman_environment.json --env-var signer_url=$(SIGNER_URL)
 	npx newman@6 run collections/petstore.postman_collection.json -e environments/petstore.postman_environment.json --env-var signer_url=$(SIGNER_URL)
 
-# Start the sandbox and the Petstore in Docker and run both collections
-# with Newman in Docker. The Petstore is restarted first, so its pets are
-# available to order again.
+# Part 1: start the sandbox (agent provider, person server, access server and
+# its demo resources) in Docker. It needs only an aauth-go checkout.
 up:
 	docker compose up -d --build --wait
 
-test-docker: up
-	docker compose up -d --wait --force-recreate petstore
+# Part 2: add the Petstore as a resource server behind the sandbox.
+up-petstore:
+	docker compose --profile petstore up -d --build --wait
+
+# Run both collections with Newman in Docker. The Petstore creates a new
+# signing key each time it starts, and the sandbox's person server keeps the
+# key it saw, so the two restart together; the Petstore's pets are also
+# available to order again.
+test-docker: up-petstore
+	docker compose --profile petstore up -d --wait --force-recreate sandbox petstore
 	docker compose --profile test run --rm newman
-	docker compose --profile test run --rm newman-petstore
+	docker compose --profile petstore run --rm newman-petstore
 
 down:
-	docker compose down -v
+	docker compose --profile "*" down -v

@@ -1,16 +1,23 @@
 # The AAuth sandbox, the Petstore as an AAuth resource behind it, and a
 # Newman run of the collection against them.
 #
-#   docker compose up -d --wait                    # start the sandbox and the Petstore
-#   docker compose --profile test run --rm newman           # the AAuth collection
-#   docker compose --profile test run --rm newman-petstore  # the Petstore collection
-#   docker compose run --rm omniagent              # chat with omniagent as the agent
+# Two parts, so each can be run and studied on its own:
+#
+#   1. The sandbox from aauth-go: agent provider, person server, access
+#      server and its demo resources. Needs only an aauth-go checkout.
+#        docker compose up -d --wait
+#        docker compose --profile test run --rm newman           # the AAuth collection
+#   2. The Petstore as a resource server of its own, behind the sandbox.
+#      Needs a petstore checkout too.
+#        docker compose --profile petstore up -d --wait
+#        docker compose --profile petstore run --rm newman-petstore  # the Petstore collection
+#        docker compose --profile petstore run --rm omniagent    # chat with omniagent as the agent
 #
 # The sandbox serves the agent provider, person server, access server and
 # its demo resources, and fronts the Petstore at https://petstore.aauth.test.
 # Until the images are published, they are built from sibling checkouts in
 # the layout ~/go/src/github.com/<org>/<repo>: aauth-go (AAUTH_GO_DIR, default
-# ../../aauth-dev/aauth-go), petstore (PETSTORE_DIR, default
+# ../../aauth-dev/aauth-go), and for part 2 petstore (PETSTORE_DIR, default
 # ../../grokify/petstore) and omniagent (OMNIAGENT_DIR, default
 # ../../plexusone/omniagent).
 
@@ -49,6 +56,9 @@ services:
 
   petstore:
     image: petstore-server:dev
+    profiles: [petstore]
+    # The Petstore creates a new signing key at each start, and the sandbox's
+    # person server keeps the key it saw: recreate the sandbox with it.
     build:
       context: ${PETSTORE_DIR:-../../grokify/petstore}
     command: ["--listen", ":8080", "--auth", "aauth",
@@ -72,8 +82,6 @@ services:
     depends_on:
       sandbox:
         condition: service_healthy
-      petstore:
-        condition: service_healthy
     working_dir: /etc/newman
     volumes:
       - ./collections:/etc/newman/collections:ro
@@ -88,7 +96,7 @@ services:
 
   newman-petstore:
     image: postman/newman:6.1.3-alpine
-    profiles: [test]
+    profiles: [petstore-test]
     depends_on:
       petstore:
         condition: service_healthy
