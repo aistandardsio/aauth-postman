@@ -16,7 +16,7 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 | `environments/` | Generated environments: the sandbox, the Petstore behind it, and a Postman mock server |
 | `pidl/` | The documents the collections are generated from: what the sandbox's resources and the Petstore perform, each extending the AAuth document |
 | `bindings/` | How the sandbox and the Petstore map to the AAuth document's roles, for comparing a run with it |
-| `docs/` | Setup guide and [interop testing runbook](docs/interop.md) |
+| `docs/` | The documentation site, published at [aistandards.io/aauth-postman](https://aistandards.io/aauth-postman/): [guides](docs/guides/) and [release notes](docs/releases/) |
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ docker compose --profile petstore run --rm newman-petstore  # the Petstore colle
 
 In Postman, import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json`, select the environment, and run a folder. Postman talks only to the signing helper at `http://127.0.0.1:8099`, so no hosts entries or certificates are needed.
 
-Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see [docs/setup.md](docs/setup.md). To test an agent, resource or person server of your own, see the [interop testing runbook](docs/interop.md). Every sandbox option is in the [aauth-go sandbox guide](https://aauth-dev.github.io/aauth-go/guides/sandbox/).
+Without Docker, run the sandbox from aauth-go with `go run ./cmd/aauth-sandbox serve`; see the [setup guide](docs/guides/setup.md). To test an agent, resource or person server of your own, see the [interop testing runbook](docs/guides/interop.md). Every sandbox option is in the [aauth-go sandbox guide](https://aauth-dev.github.io/aauth-go/guides/sandbox/).
 
 ## The Petstore, Two Ways
 
@@ -70,7 +70,7 @@ make demo-omniagent   # omniagent plays the agent; needs ANTHROPIC_API_KEY (or a
 
 Each scenario the run performed appears as an "Observed" entry. Its steps show the real request and response, each token decoded (but not verified) with raw values masked, when each message happened, and the exchanges the protocol does not describe, such as servers fetching each other's keys, between the steps they fell between. A Concept / Observed switch shows the document's example instead. The run is matched to the steps by [pidl](https://github.com/grokify/pidl) with the binding in `bindings/sandbox-petstore.binding.json`.
 
-The targets run pidl v0.10.0 with `go run` and fetch the AAuth document from the agent-protocols v0.9.0 release, so they need Go and network access but no checkouts of either; see [Regenerating](docs/setup.md#regenerating) to use other versions. `demo/` holds the raw trace, with real development tokens, and is not committed.
+The targets run pidl v0.10.0 with `go run` and fetch the AAuth document from the agent-protocols v0.9.0 release, so they need Go and network access but no checkouts of either; see [Regenerating](docs/guides/setup.md#regenerating) to use other versions. `demo/` holds the raw trace, with real development tokens, and is not committed.
 
 ## Exploring Without Running Anything
 

@@ -17,3 +17,6 @@ node_modules/
 
 # The AAuth document, fetched by make from agent-protocols
 pidl/aauth_protocol.json
+
+# MkDocs build output
+site/

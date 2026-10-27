@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block header %}
+<!-- AIStandards.io Unified Navigation -->
+<div id="ais-navbar-container"></div>
+<script src="https://aistandards.io/js/lit-navbar.js"></script>
+<script>
+  // Create and configure navbar after component is loaded
+  customElements.whenDefined('lit-navbar').then(function() {
+    var container = document.getElementById('ais-navbar-container');
+    var navbar = document.createElement('lit-navbar');
+    navbar.config = {
+      baseUrl: 'https://aistandards.io',
+      brand: {
+        logoUrl: 'https://aistandards.io/icon.png',
+        logoAlt: 'AIStandards.io',
+        title: 'AI',
+        titlePrimary: 'Standards',
+        titleMuted: '.io',
+        homeUrl: 'https://aistandards.io'
+      },
+      menu: [
+        {
+          type: 'link',
+          label: 'Standards',
+          url: 'https://aistandards.io/standards'
+        },
+        {
+          type: 'link',
+          label: 'Implementations',
+          url: 'https://aistandards.io/implementations'
+        },
+        {
+          type: 'link',
+          label: 'About',
+          url: 'https://aistandards.io/about'
+        }
+      ],
+      github: {
+        url: 'https://github.com/aistandardsio',
+        label: 'GitHub'
+      },
+      theme: {
+        primaryColor: '#ff6b00',
+        secondaryColor: '#00d4ff',
+        backgroundColor: '#0a0a0f',
+        textColor: '#e4e4ed',
+        mutedColor: '#8888a0',
+        borderColor: '#1e1e2e'
+      }
+    };
+    container.appendChild(navbar);
+  });
+</script>
+
+{{ super() }}
+{% endblock %}
