@@ -22,8 +22,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "jkt-jwt"
+                "key": "Signature-Key",
+                "value": "sig=jkt-jwt"
               }
             ],
             "body": {
@@ -66,12 +66,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Sandbox-Present",
-                "value": "agent"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{agent_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{agent_token}}\""
               }
             ],
             "url": "{{signer_url}}/{{resource_url}}/v2/pet/findByStatus?status=available"
@@ -121,8 +117,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "jkt-jwt"
+                "key": "Signature-Key",
+                "value": "sig=jkt-jwt"
               }
             ],
             "body": {
@@ -169,12 +165,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "agent"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{agent_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{agent_token}}\""
               }
             ],
             "body": {
@@ -213,12 +205,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "agent"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{agent_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{agent_token}}\""
               }
             ],
             "body": {
@@ -265,12 +253,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "person"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{person_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{person_token}}\""
               }
             ],
             "body": {
@@ -292,7 +276,7 @@
                 "exec": [
                   "pm.test('status 401', () => pm.response.to.have.status(401));",
                   "pm.test('header AAuth-Requirement', () => pm.response.to.have.header(\"AAuth-Requirement\"));",
-                  "pm.collectionVariables.set(\"resource_token\", ((pm.response.headers.get(\"AAuth-Requirement\") || \"\").match(/(?:^|;)\\s*resource-token=\"([^\"]*)\"/) || [])[1]);"
+                  "pm.collectionVariables.set(\"resource_token\", ((pm.response.headers.get(\"AAuth-Requirement\") || \"\").match(/(?:^|[;,\\s])\\s*resource-token=\"([^\"]*)\"/) || [])[1]);"
                 ]
               }
             }
@@ -314,12 +298,8 @@
                 "value": "wait=45"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "agent"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{agent_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{agent_token}}\""
               }
             ],
             "body": {
@@ -379,12 +359,8 @@
                 "value": "wait=45"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "agent"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{agent_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{agent_token}}\""
               }
             ],
             "url": "{{signer_url}}/{{location}}"
@@ -430,12 +406,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Sandbox-Present",
-                "value": "auth"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{auth_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{auth_token}}\""
               }
             ],
             "body": {
@@ -476,12 +448,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Sandbox-Present",
-                "value": "auth"
-              },
-              {
-                "key": "X-Sandbox-Token",
-                "value": "{{auth_token}}"
+                "key": "Signature-Key",
+                "value": "sig=jwt;jwt=\"{{auth_token}}\""
               }
             ],
             "url": "{{signer_url}}/{{resource_url}}/v2/store/order/1"
@@ -537,7 +505,7 @@
     },
     {
       "key": "signer_url",
-      "value": "http://127.0.0.1:8099"
+      "value": ""
     }
   ]
 }

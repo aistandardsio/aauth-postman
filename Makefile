@@ -1,19 +1,38 @@
-# Generate the collections and environments from PIDL's AAuth description.
-# PIDL_DIR is a checkout of github.com/grokify/pidl.
-PIDL_DIR ?= ../../grokify/pidl
+# Generate the collections and environments from the AAuth PIDL document.
+# pidl runs at a released version; set PIDL to use another build, such as
+# PIDL="go -C ../../grokify/pidl run ./cmd/pidl".
+PIDL_VERSION ?= v0.10.0
+PIDL ?= go run github.com/grokify/pidl/cmd/pidl@$(PIDL_VERSION)
 OUT := $(CURDIR)
-PIDL := cd $(PIDL_DIR) && go run ./cmd/pidl
-PROTOCOL := aauth_protocol
-PETSTORE := aauth_petstore
 
-.PHONY: generate run-sandbox up up-petstore test-docker down
+# The AAuth document comes from a release of aistandardsio/agent-protocols.
+# The documents in pidl/ extend it, so it is fetched next to them.
+AAUTH_PROTOCOLS_VERSION ?= v0.9.0
+CURL ?= curl
+AAUTH_DOC_URL := https://raw.githubusercontent.com/aistandardsio/agent-protocols/$(AAUTH_PROTOCOLS_VERSION)/aauth/pidl/aauth_protocol.json
+PROTOCOL := $(CURDIR)/pidl/aauth_protocol.json
+# aauth_sandbox.json and aauth_petstore.json extend it with what each set of
+# resources performs.
+SANDBOX := $(CURDIR)/pidl/aauth_sandbox.json
+PETSTORE := $(CURDIR)/pidl/aauth_petstore.json
 
-generate:
-	$(PIDL) generate -f postman --signer aauth-sandbox -o $(OUT)/collections/aauth.postman_collection.json $(PROTOCOL)
-	$(PIDL) generate -f postman --mock -o $(OUT)/collections/aauth-mock.postman_collection.json $(PROTOCOL)
-	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target sandbox -o $(OUT)/environments/sandbox.postman_environment.json $(PROTOCOL)
-	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target mock -o $(OUT)/environments/mock.postman_environment.json $(PROTOCOL)
-	$(PIDL) generate -f postman --signer aauth-sandbox -o $(OUT)/collections/petstore.postman_collection.json $(PETSTORE)
+.PHONY: aauth-doc generate run-sandbox up up-petstore test-docker demo demo-omniagent demo-page down
+
+# Fetch the AAuth document. Set AAUTH_DOC to use a local copy instead, such
+# as an agent-protocols checkout's aauth/pidl/aauth_protocol.json.
+aauth-doc:
+ifdef AAUTH_DOC
+	cp $(AAUTH_DOC) $(PROTOCOL)
+else
+	$(CURL) -fsSL -o $(PROTOCOL) $(AAUTH_DOC_URL)
+endif
+
+generate: aauth-doc
+	$(PIDL) generate -f postman --signer proxy -o $(OUT)/collections/aauth.postman_collection.json $(SANDBOX)
+	$(PIDL) generate -f postman --mock -o $(OUT)/collections/aauth-mock.postman_collection.json $(SANDBOX)
+	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target sandbox -o $(OUT)/environments/sandbox.postman_environment.json $(SANDBOX)
+	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target mock -o $(OUT)/environments/mock.postman_environment.json $(SANDBOX)
+	$(PIDL) generate -f postman --signer proxy -o $(OUT)/collections/petstore.postman_collection.json $(PETSTORE)
 	$(PIDL) generate -f postman-environment --targets $(OUT)/targets.json --target petstore -o $(OUT)/environments/petstore.postman_environment.json $(PETSTORE)
 
 # Run every folder against a running sandbox (aauth-sandbox serve). Set
@@ -41,6 +60,35 @@ test-docker: up-petstore
 	docker compose --profile petstore up -d --wait --force-recreate sandbox petstore
 	docker compose --profile test run --rm newman
 	docker compose --profile petstore run --rm newman-petstore
+
+# See a run beside the protocol. The demo targets run the Petstore order
+# flow against fresh servers, capture the sandbox's trace of every message,
+# and write demo/live.html: the AAuth walkthrough with this run's messages
+# beside each step. The page opens from disk. demo/ holds the raw trace,
+# real development tokens included, and is not committed.
+BINDING := $(CURDIR)/bindings/sandbox-petstore.binding.json
+DEMO := $(CURDIR)/demo
+PROMPT ?= List the available pets, then place an order for pet 2, quantity 1. I have already confirmed; do not ask.
+
+# Newman plays the agent, through the signing helper.
+demo: up-petstore
+	docker compose --profile petstore up -d --wait --force-recreate sandbox petstore
+	docker compose --profile petstore run --rm newman-petstore
+	$(MAKE) demo-page
+
+# omniagent plays the agent and signs its own requests. It needs a model:
+# ANTHROPIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in the environment.
+demo-omniagent: up-petstore
+	docker compose --profile petstore up -d --wait --force-recreate sandbox petstore
+	docker compose --profile petstore run --rm -T omniagent --prompt "$(PROMPT)"
+	$(MAKE) demo-page
+
+demo-page: aauth-doc
+	@mkdir -p $(DEMO)
+	docker compose exec -T sandbox aauth-sandbox trace --state /state > $(DEMO)/trace.json
+	$(PIDL) observe import --from sandbox -o $(DEMO)/run.json $(DEMO)/trace.json
+	$(PIDL) generate -f viewer --observation $(DEMO)/run.json --binding $(BINDING) -o $(DEMO)/live.html $(PROTOCOL)
+	@echo "Open $(DEMO)/live.html"
 
 down:
 	docker compose --profile "*" down -v

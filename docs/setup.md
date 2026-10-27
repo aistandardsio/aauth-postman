@@ -68,14 +68,16 @@ npx newman@6 run collections/aauth.postman_collection.json \
 
 ## How Signing Works
 
-Postman cannot create HTTP message signatures, so every request goes to the sandbox's signing helper at `{{signer_url}}`, followed by the real target URL. Two headers tell the helper what to do, and it removes them before forwarding:
+Postman cannot create HTTP message signatures, so every signed request goes to the sandbox's signing helper at `{{signer_url}}`, followed by the real target URL. The request's `Signature-Key` header tells the helper how to sign:
 
-| Header | Meaning |
-|--------|---------|
-| `X-Sandbox-Present` | How to sign: `agent`, `person` or `auth` (present that token), `jkt-jwt` (agent provider enrollment), `hwk`, or `none` |
-| `X-Sandbox-Token` | The token to present, saved from an earlier response |
+| `Signature-Key` | Meaning |
+|-----------------|---------|
+| `sig=jwt;jwt="{{agent_token}}"` | Present that token, saved from an earlier response, as the agent, person or auth token its `typ` names |
+| `sig=jwt` | Present the helper's own agent token |
+| `sig=jkt-jwt` | Agent provider enrollment |
+| `sig=hwk` | Sign with the header web key scheme |
 
-The helper adds `Content-Digest` for bodies, `Signature-Key` with the presented token, and the `Signature-Input` and `Signature` headers, using the test agent's keys.
+The helper replaces it with the real `Signature-Key`, and adds `Content-Digest` for bodies and the `Signature-Input` and `Signature` headers, using the test agent's keys. Requests that carry no signature are sent directly.
 
 ## Mock Mode
 
@@ -83,8 +85,23 @@ The helper adds `Content-Digest` for bodies, `Signature-Key` with the presented 
 
 ## Regenerating
 
-The collections and environments are generated from PIDL's AAuth description and `targets.json`:
+The collections and environments are generated with [pidl](https://github.com/grokify/pidl) from the documents in `pidl/` and `targets.json`:
 
 ```bash
-make generate PIDL_DIR=../../grokify/pidl
+make generate
 ```
+
+| Document | Collections | Scenarios |
+|----------|-------------|-----------|
+| `pidl/aauth_sandbox.json` | `aauth`, `aauth-mock` | The five access modes, as the sandbox's resources perform them |
+| `pidl/aauth_petstore.json` | `petstore` | Browsing the pets and placing an order |
+
+Both extend the AAuth document, `aauth/pidl/aauth_protocol.json` in [agent-protocols](https://github.com/aistandardsio/agent-protocols), which `make` fetches from a release into `pidl/aauth_protocol.json`. The sandbox document leaves out the variant in which the resource challenges on the API call, because the sandbox's resources publish an authorization endpoint instead; the Petstore's order flow performs it.
+
+| Variable | Default | Sets |
+|----------|---------|------|
+| `PIDL_VERSION` | `v0.10.0` | The pidl release that `go run` uses |
+| `PIDL` | `go run github.com/grokify/pidl/cmd/pidl@$(PIDL_VERSION)` | The pidl command, such as `PIDL="go -C ../../grokify/pidl run ./cmd/pidl"` for a checkout |
+| `AAUTH_PROTOCOLS_VERSION` | `v0.9.0` | The agent-protocols release the AAuth document comes from |
+| `AAUTH_DOC` | | A local AAuth document to use instead, such as an agent-protocols checkout's |
+| `CURL` | `curl` | The curl command that fetches it |

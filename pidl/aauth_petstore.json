@@ -1,0 +1,792 @@
+{
+  "protocol": {
+    "id": "aauth-petstore",
+    "name": "AAuth Petstore",
+    "version": "draft-11",
+    "language": "en-US",
+    "description": "The Swagger Petstore as an AAuth resource (draft-hardt-oauth-aauth-protocol-11): each operation asks the agent for what it needs. Browsing needs the agent's identity; placing an order needs the person's approval for write:orders.",
+    "category": "agent",
+    "references": [
+      {
+        "name": "draft-hardt-oauth-aauth-protocol-11",
+        "url": "https://datatracker.ietf.org/doc/draft-hardt-oauth-aauth-protocol/11/"
+      }
+    ]
+  },
+  "extends": {
+    "path": "aauth_protocol.json",
+    "exclude_scenarios": [
+      "agent-identity",
+      "resource-managed",
+      "person-identity",
+      "ps-authorization",
+      "federated-authorization",
+      "ps-authorization-challenge"
+    ]
+  },
+  "entities": [
+    {
+      "id": "resource",
+      "name": "Petstore",
+      "type": "resource_server",
+      "description": "The Swagger Petstore, serving each operation at the access level its x-aauth annotation names.",
+      "trust_level": "trusted",
+      "protocol_roles": [
+        {
+          "protocol": "aauth",
+          "role": "resource"
+        }
+      ]
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "browse-pets",
+      "name": "Browse pets",
+      "description": "The agent looks for available pets. Browsing the catalog needs only the agent's identity: the request is signed with the agent's key and presents its agent token, and the Petstore answers without asking who the person is.",
+      "flows": [
+        {
+          "include": "agent-token"
+        },
+        {
+          "id": "find-pets",
+          "from": "agent",
+          "to": "resource",
+          "action": "api_request",
+          "label": "GET /v2/pet/findByStatus (HTTP Sig w/ agent_token)",
+          "description": "The agent asks for available pets, signing the request and presenting its agent token.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "agent_token",
+            "verifies": [
+              "agent_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "request": {
+              "method": "GET",
+              "url": "https://resource.example/v2/pet/findByStatus?status=available",
+              "headers": [
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217600"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYWdlbnQrand0Iiwia2lkIjoiYXAta2V5LTEifQ.eyJpc3MiOi…\""
+                }
+              ]
+            },
+            "tokens": [
+              {
+                "token": "agent_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-agent+jwt",
+                  "kid": "ap-key-1"
+                },
+                "payload": {
+                  "iss": "https://agent.example",
+                  "dwk": "aauth-agent.json",
+                  "sub": "aauth:assistant@agent.example",
+                  "ps": "https://ps.example",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "at-1c2d3e",
+                  "iat": 1730217000,
+                  "exp": 1730303400
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "pets",
+          "from": "resource",
+          "to": "agent",
+          "action": "ok",
+          "label": "200 OK (available pets)",
+          "mode": "response",
+          "description": "The Petstore verifies the agent token and the signature and lists the pets. It knows which agent called, not which person.",
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "response": {
+              "status": 200,
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": [
+                {
+                  "id": 1,
+                  "name": "Fido",
+                  "category": {
+                    "id": 1,
+                    "name": "Dogs"
+                  },
+                  "photoUrls": [
+                    "https://example.com/pets/Fido.jpg"
+                  ],
+                  "status": "available"
+                },
+                {
+                  "id": 3,
+                  "name": "Whiskers",
+                  "category": {
+                    "id": 2,
+                    "name": "Cats"
+                  },
+                  "photoUrls": [
+                    "https://example.com/pets/Whiskers.jpg"
+                  ],
+                  "status": "available"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-a-pet",
+      "name": "Order a pet",
+      "description": "The agent orders a pet for the person. The Petstore needs to know who the order is for and that the person approved it, so it challenges twice: first for a person token, then for an auth token granting write:orders, which the person approves at their person server.",
+      "flows": [
+        {
+          "include": "agent-token"
+        },
+        {
+          "id": "order",
+          "from": "agent",
+          "to": "resource",
+          "action": "api_request",
+          "label": "POST /v2/store/order (HTTP Sig w/ agent_token)",
+          "description": "The agent places the order, presenting its agent token as it would for browsing.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "agent_token",
+            "verifies": [
+              "agent_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "request": {
+              "method": "POST",
+              "url": "https://resource.example/v2/store/order",
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "Content-Digest",
+                  "value": "sha-256=:BbF2thLukxDjIMSySycGN9WYDH9v21IbmrWajIKctQA=:"
+                },
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\" \"content-digest\" \"content-type\");created=1730217610"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYWdlbnQrand0Iiwia2lkIjoiYXAta2V5LTEifQ.eyJpc3MiOi…\""
+                }
+              ],
+              "body": {
+                "petId": 1,
+                "quantity": 1
+              }
+            },
+            "tokens": [
+              {
+                "token": "agent_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-agent+jwt",
+                  "kid": "ap-key-1"
+                },
+                "payload": {
+                  "iss": "https://agent.example",
+                  "dwk": "aauth-agent.json",
+                  "sub": "aauth:assistant@agent.example",
+                  "ps": "https://ps.example",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "at-1c2d3e",
+                  "iat": 1730217000,
+                  "exp": 1730303400
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "person-required",
+          "from": "resource",
+          "to": "agent",
+          "action": "challenge",
+          "label": "401 requirement=person-token",
+          "mode": "response",
+          "description": "Orders belong to a person, so the Petstore asks for a person token.",
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "response": {
+              "status": 401,
+              "headers": [
+                {
+                  "name": "AAuth-Requirement",
+                  "value": "requirement=person-token"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "include": "person-token"
+        },
+        {
+          "id": "order-as-person",
+          "from": "agent",
+          "to": "resource",
+          "action": "api_request",
+          "label": "POST /v2/store/order (HTTP Sig w/ person_token)",
+          "description": "The agent retries, presenting the person token in place of its agent token.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "person_token",
+            "verifies": [
+              "person_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "request": {
+              "method": "POST",
+              "url": "https://resource.example/v2/store/order",
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "Content-Digest",
+                  "value": "sha-256=:BbF2thLukxDjIMSySycGN9WYDH9v21IbmrWajIKctQA=:"
+                },
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\" \"content-digest\" \"content-type\");created=1730217640"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtcGVyc29uK2p3dCIsImtpZCI6InBzLWtleS0xIn0.eyJpc3MiOi…\""
+                }
+              ],
+              "body": {
+                "petId": 1,
+                "quantity": 1
+              }
+            },
+            "tokens": [
+              {
+                "token": "person_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-person+jwt",
+                  "kid": "ps-key-1"
+                },
+                "payload": {
+                  "iss": "https://ps.example",
+                  "dwk": "aauth-person.json",
+                  "aud": "https://resource.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "pt-3ab910",
+                  "iat": 1730217600,
+                  "exp": 1730221200
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "auth-required",
+          "from": "resource",
+          "to": "agent",
+          "action": "challenge",
+          "label": "401 requirement=auth-token (resource_token)",
+          "mode": "response",
+          "description": "Now the Petstore knows the person. Placing an order needs their approval for write:orders, so it answers with a resource token for that scope, bound to the agent's key and the person token.",
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "response": {
+              "status": 401,
+              "headers": [
+                {
+                  "name": "AAuth-Requirement",
+                  "value": "requirement=auth-token; resource-token=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtcmVzb3VyY2Urand0Iiwia2lkIjoicmVzb3VyY2Uta2V5LTEifQ.eyJpc3MiOiJodHRwczovL3Jlc291cmNlLmV4YW1wbGUiLCJkd2siOiJhYXV0aC1yZXNvdXJjZS5qc29uIiwiYXVkIjoiaHR0cHM6Ly9wcy5leGFtcGxlIiwicHMiOiJodHRwczovL3BzLmV4YW1wbGUiLCJzdWIiOiI4ZjE0ZTQ1ZmNlZWExNjdhNWEzNmRlZGQ0YmVhMjU0MyIsInByZXNlbnRlZF9qdGkiOiJwdC0zYWI5MTAiLCJhZ2VudF9qa3QiOiJrUHJLX3FteFZXYVlWQTl3d0JGNkl1bzN2Vnp6N1R4SENUd1hCeWdyUzRrIiwic2NvcGUiOiJ3cml0ZTpvcmRlcnMiLCJqdGkiOiJydC05ZTFjNDIiLCJpYXQiOjE3MzAyMTc2NjAsImV4cCI6MTczMDIxNzk2MH0.SIGNATURE\""
+                }
+              ]
+            },
+            "note": "The resource token travels in the AAuth-Requirement header. Its aud is the person server, so only that server can redeem it."
+          }
+        },
+        {
+          "id": "auth-token-request",
+          "from": "agent",
+          "to": "ps",
+          "action": "auth_token_request",
+          "label": "POST auth_token_endpoint w/ resource_token + presented_token",
+          "description": "The agent brings the resource token to its person server, with the person token it presented and a short reason. The person server checks that the resource token names this agent's key and the person token, and asks the person.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "agent_token",
+            "verifies": [
+              "agent_token",
+              "resource_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §7.2.1, §11.3.3.1",
+            "kind": "draft",
+            "request": {
+              "method": "POST",
+              "url": "https://ps.example/token",
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "Content-Digest",
+                  "value": "sha-256=:BVDvVWNtO+YYpt8sRAObdKNAuXllbMBrmcwsyhNdERA=:"
+                },
+                {
+                  "name": "Prefer",
+                  "value": "wait=45"
+                },
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\" \"content-digest\" \"content-type\");created=1730217700"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYWdlbnQrand0Iiwia2lkIjoiYXAta2V5LTEifQ.eyJpc3MiOi…\""
+                }
+              ],
+              "body": {
+                "resource_token": "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtcmVzb3VyY2Urand0Iiwia2lkIjoicmVzb3VyY2Uta2V5LTEifQ.eyJpc3MiOiJodHRwczovL3Jlc291cmNlLmV4YW1wbGUiLCJkd2siOiJhYXV0aC1yZXNvdXJjZS5qc29uIiwiYXVkIjoiaHR0cHM6Ly9wcy5leGFtcGxlIiwicHMiOiJodHRwczovL3BzLmV4YW1wbGUiLCJzdWIiOiI4ZjE0ZTQ1ZmNlZWExNjdhNWEzNmRlZGQ0YmVhMjU0MyIsInByZXNlbnRlZF9qdGkiOiJwdC0zYWI5MTAiLCJhZ2VudF9qa3QiOiJrUHJLX3FteFZXYVlWQTl3d0JGNkl1bzN2Vnp6N1R4SENUd1hCeWdyUzRrIiwic2NvcGUiOiJ3cml0ZTpvcmRlcnMiLCJqdGkiOiJydC05ZTFjNDIiLCJpYXQiOjE3MzAyMTc2NjAsImV4cCI6MTczMDIxNzk2MH0.SIGNATURE",
+                "presented_token": "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtcGVyc29uK2p3dCIsImtpZCI6InBzLWtleS0xIn0.eyJpc3MiOiJodHRwczovL3BzLmV4YW1wbGUiLCJkd2siOiJhYXV0aC1wZXJzb24uanNvbiIsImF1ZCI6Imh0dHBzOi8vcmVzb3VyY2UuZXhhbXBsZSIsInN1YiI6IjhmMTRlNDVmY2VlYTE2N2E1YTM2ZGVkZDRiZWEyNTQzIiwiY25mIjp7Imp3ayI6eyJrdHkiOiJPS1AiLCJjcnYiOiJFZDI1NTE5IiwieCI6IjExcVlBWUt4Q3JmVlNfN1R5V1FIT2c3aGN2UGFwaU1scndJYWFQY0hVUm8iLCJhbGciOiJFZDI1NTE5In19LCJqdGkiOiJwdC0zYWI5MTAiLCJpYXQiOjE3MzAyMTc2MDAsImV4cCI6MTczMDIyMTIwMH0.SIGNATURE",
+                "justification": "Order Fido, as the person asked"
+              }
+            },
+            "tokens": [
+              {
+                "token": "agent_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-agent+jwt",
+                  "kid": "ap-key-1"
+                },
+                "payload": {
+                  "iss": "https://agent.example",
+                  "dwk": "aauth-agent.json",
+                  "sub": "aauth:assistant@agent.example",
+                  "ps": "https://ps.example",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "at-1c2d3e",
+                  "iat": 1730217000,
+                  "exp": 1730303400
+                }
+              },
+              {
+                "token": "resource_token",
+                "label": "request body",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-resource+jwt",
+                  "kid": "resource-key-1"
+                },
+                "payload": {
+                  "iss": "https://resource.example",
+                  "dwk": "aauth-resource.json",
+                  "aud": "https://ps.example",
+                  "ps": "https://ps.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "presented_jti": "pt-3ab910",
+                  "agent_jkt": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+                  "scope": "write:orders",
+                  "jti": "rt-9e1c42",
+                  "iat": 1730217660,
+                  "exp": 1730217960
+                }
+              },
+              {
+                "token": "person_token",
+                "label": "request body, as presented_token",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-person+jwt",
+                  "kid": "ps-key-1"
+                },
+                "payload": {
+                  "iss": "https://ps.example",
+                  "dwk": "aauth-person.json",
+                  "aud": "https://resource.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "pt-3ab910",
+                  "iat": 1730217600,
+                  "exp": 1730221200
+                }
+              }
+            ],
+            "note": "The PS checks agent_jkt against the key that signed this request (the agent's), and checks presented_token against the resource token's presented_jti, ps and sub."
+          }
+        },
+        {
+          "include": "consent"
+        },
+        {
+          "id": "auth-token",
+          "from": "ps",
+          "to": "agent",
+          "action": "auth_token",
+          "label": "auth_token",
+          "mode": "response",
+          "description": "With the person's approval, the person server issues an auth token for the Petstore granting write:orders.",
+          "security": {
+            "issues": [
+              "auth_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §7.2.2, §9.4.1",
+            "kind": "draft",
+            "response": {
+              "status": 200,
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "auth_token": "eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYXV0aCtqd3QiLCJraWQiOiJwcy1rZXktMSJ9.eyJpc3MiOiJodHRwczovL3BzLmV4YW1wbGUiLCJkd2siOiJhYXV0aC1wZXJzb24uanNvbiIsImF1ZCI6Imh0dHBzOi8vcmVzb3VyY2UuZXhhbXBsZSIsInBzIjoiaHR0cHM6Ly9wcy5leGFtcGxlIiwic3ViIjoiOGYxNGU0NWZjZWVhMTY3YTVhMzZkZWRkNGJlYTI1NDMiLCJzY29wZSI6IndyaXRlOm9yZGVycyIsImNuZiI6eyJqd2siOnsia3R5IjoiT0tQIiwiY3J2IjoiRWQyNTUxOSIsIngiOiIxMXFZQVlLeENyZlZTXzdUeVdRSE9nN2hjdlBhcGlNbHJ3SWFhUGNIVVJvIiwiYWxnIjoiRWQyNTUxOSJ9fSwianRpIjoiYXV0aC00YzJkNzEiLCJpYXQiOjE3MzAyMTc3MjAsImV4cCI6MTczMDIyMTIwMH0.SIGNATURE",
+                "expires_in": 3480
+              }
+            },
+            "tokens": [
+              {
+                "token": "auth_token",
+                "label": "response body",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-auth+jwt",
+                  "kid": "ps-key-1"
+                },
+                "payload": {
+                  "iss": "https://ps.example",
+                  "dwk": "aauth-person.json",
+                  "aud": "https://resource.example",
+                  "ps": "https://ps.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "scope": "write:orders",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "auth-4c2d71",
+                  "iat": 1730217720,
+                  "exp": 1730221200
+                }
+              }
+            ],
+            "note": "The PS issues the auth token itself (dwk aauth-person.json). Its exp does not exceed the person token's, so expires_in is shorter than an hour."
+          }
+        },
+        {
+          "id": "order-with-auth",
+          "from": "agent",
+          "to": "resource",
+          "action": "api_request",
+          "label": "POST /v2/store/order (HTTP Sig w/ auth_token)",
+          "description": "The agent retries once more, presenting the auth token.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "auth_token",
+            "verifies": [
+              "auth_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "request": {
+              "method": "POST",
+              "url": "https://resource.example/v2/store/order",
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "Content-Digest",
+                  "value": "sha-256=:BbF2thLukxDjIMSySycGN9WYDH9v21IbmrWajIKctQA=:"
+                },
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\" \"content-digest\" \"content-type\");created=1730217730"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYXV0aCtqd3QiLCJraWQiOiJwcy1rZXktMSJ9.eyJpc3MiOi…\""
+                }
+              ],
+              "body": {
+                "petId": 1,
+                "quantity": 1
+              }
+            },
+            "tokens": [
+              {
+                "token": "auth_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-auth+jwt",
+                  "kid": "ps-key-1"
+                },
+                "payload": {
+                  "iss": "https://ps.example",
+                  "dwk": "aauth-person.json",
+                  "aud": "https://resource.example",
+                  "ps": "https://ps.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "scope": "write:orders",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "auth-4c2d71",
+                  "iat": 1730217720,
+                  "exp": 1730221200
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "placed",
+          "from": "resource",
+          "to": "agent",
+          "action": "ok",
+          "label": "200 OK (order placed)",
+          "mode": "response",
+          "description": "The Petstore verifies the auth token, sees write:orders, and places the order for the person the token names.",
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "response": {
+              "status": 200,
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "id": 1,
+                "petId": 1,
+                "quantity": 1,
+                "status": "placed",
+                "complete": false
+              }
+            }
+          }
+        },
+        {
+          "id": "check-order",
+          "from": "agent",
+          "to": "resource",
+          "action": "api_request",
+          "label": "GET /v2/store/order/1 (HTTP Sig w/ auth_token)",
+          "description": "The agent checks the order. The auth token also proves the person, which is all reading an order needs.",
+          "security": {
+            "requires": [
+              "signature"
+            ],
+            "token": "auth_token",
+            "verifies": [
+              "auth_token"
+            ]
+          },
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "request": {
+              "method": "GET",
+              "url": "https://resource.example/v2/store/order/1",
+              "headers": [
+                {
+                  "name": "Signature-Input",
+                  "value": "sig=(\"@method\" \"@authority\" \"@path\" \"signature-key\");created=1730217740"
+                },
+                {
+                  "name": "Signature",
+                  "value": "sig=:SIGNATURE-PLACEHOLDER:"
+                },
+                {
+                  "name": "Signature-Key",
+                  "value": "sig=jwt;jwt=\"eyJhbGciOiJFZDI1NTE5IiwidHlwIjoiYWEtYXV0aCtqd3QiLCJraWQiOiJwcy1rZXktMSJ9.eyJpc3MiOi…\""
+                }
+              ]
+            },
+            "tokens": [
+              {
+                "token": "auth_token",
+                "label": "Signature-Key header",
+                "header": {
+                  "alg": "Ed25519",
+                  "typ": "aa-auth+jwt",
+                  "kid": "ps-key-1"
+                },
+                "payload": {
+                  "iss": "https://ps.example",
+                  "dwk": "aauth-person.json",
+                  "aud": "https://resource.example",
+                  "ps": "https://ps.example",
+                  "sub": "8f14e45fceea167a5a36dedd4bea2543",
+                  "scope": "write:orders",
+                  "cnf": {
+                    "jwk": {
+                      "kty": "OKP",
+                      "crv": "Ed25519",
+                      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+                      "alg": "Ed25519"
+                    }
+                  },
+                  "jti": "auth-4c2d71",
+                  "iat": 1730217720,
+                  "exp": 1730221200
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "order-details",
+          "from": "resource",
+          "to": "agent",
+          "action": "ok",
+          "label": "200 OK (the order)",
+          "mode": "response",
+          "description": "The Petstore returns the order, which belongs to this person.",
+          "example": {
+            "source": "draft-11 §6",
+            "kind": "derived",
+            "response": {
+              "status": 200,
+              "headers": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "id": 1,
+                "petId": 1,
+                "quantity": 1,
+                "status": "placed",
+                "complete": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
