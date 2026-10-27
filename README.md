@@ -18,14 +18,23 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 
 ## Quick Start
 
-With Docker, and an aauth-go checkout at `../../aauth-dev/aauth-go` (the `~/go/src/github.com/<org>/<repo>` layout) until the sandbox image is published:
+The setup has two parts, so each can be run and studied on its own. With Docker, and the checkouts below in the `~/go/src/github.com/<org>/<repo>` layout until the images are published:
+
+**Part 1: the AAuth sandbox.** The agent provider, person server and access server, with the demo resources of [aauth-go](https://github.com/aauth-dev/aauth-go). It needs only an aauth-go checkout, at `../../aauth-dev/aauth-go`.
 
 ```bash
-docker compose up -d --wait                     # the AAuth sandbox (every role and the signing helper) and the Petstore
+docker compose up -d --build --wait             # the sandbox: every role and the signing helper
 docker compose --profile test run --rm newman   # run every access mode with Newman
 ```
 
-Or `make test-docker`, which also runs the Petstore collection.
+**Part 2: the Petstore resource server.** The [Petstore](https://github.com/grokify/petstore) as a resource server of its own, behind the sandbox. It also needs a petstore checkout (v0.2.0 or later), at `../../grokify/petstore`.
+
+```bash
+docker compose --profile petstore up -d --build --wait      # adds the Petstore
+docker compose --profile petstore run --rm newman-petstore  # the Petstore collection
+```
+
+`make test-docker` runs both parts. To start over, or to make the Petstore's pets available to order again, recreate the sandbox and the Petstore together (`docker compose --profile petstore up -d --wait --force-recreate sandbox petstore`): the Petstore creates a new signing key each time it starts, and the sandbox's person server keeps the key it saw.
 
 In Postman, import `collections/aauth.postman_collection.json` and `environments/sandbox.postman_environment.json`, select the environment, and run a folder. Postman talks only to the signing helper at `http://127.0.0.1:8099`, so no hosts entries or certificates are needed.
 
@@ -37,8 +46,8 @@ The [Swagger Petstore](https://github.com/grokify/petstore) runs next to the san
 
 | Demo | The agent | Run it |
 |------|-----------|--------|
-| Postman | Postman, one step per request | `collections/petstore.postman_collection.json` with `environments/petstore.postman_environment.json`, or `docker compose --profile test run --rm newman-petstore` |
-| omniagent | [omniagent](https://github.com/plexusone/omniagent), an AI agent whose tools are the Petstore's operations | `ANTHROPIC_API_KEY=... docker compose run --rm omniagent` |
+| Postman | Postman, one step per request | `collections/petstore.postman_collection.json` with `environments/petstore.postman_environment.json`, or `docker compose --profile petstore run --rm newman-petstore` |
+| omniagent | [omniagent](https://github.com/plexusone/omniagent), an AI agent whose tools are the Petstore's operations | `ANTHROPIC_API_KEY=... docker compose --profile petstore run --rm omniagent` |
 
 In the Postman folder each challenge is a request you can inspect: the order is refused with `requirement=person-token`, then with `requirement=auth-token` and a resource token, the person server asks the person to approve, and the order goes through with the auth token. omniagent does the same steps inside its HTTP client and prints the approval link. Compare them in the sandbox's trace:
 
@@ -46,7 +55,7 @@ In the Postman folder each challenge is a request you can inspect: the order is 
 docker compose exec sandbox aauth-sandbox trace --state /state
 ```
 
-The omniagent container also needs an omniagent checkout next to this one (`../../plexusone/omniagent`), and the Petstore a petstore checkout (`../../grokify/petstore`), until their images are published.
+The omniagent container also needs an omniagent checkout at `../../plexusone/omniagent`, until its image is published. Set `AAUTH_GO_DIR`, `PETSTORE_DIR` or `OMNIAGENT_DIR` if a checkout is elsewhere.
 
 ## Exploring Without Running Anything
 

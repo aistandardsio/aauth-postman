@@ -15,17 +15,20 @@ The two reference agents are this repository's Postman collections (one request 
 ## Run the Reference Setup
 
 ```bash
-docker compose up -d --build --wait                      # sandbox and Petstore
-docker compose --profile test run --rm newman            # 21 requests, 98 assertions
-docker compose --profile test run --rm newman-petstore   # 10 requests, 47 assertions
+docker compose up -d --build --wait                          # part 1: the sandbox
+docker compose --profile test run --rm newman                # 21 requests, 98 assertions
+docker compose --profile petstore up -d --build --wait       # part 2: adds the Petstore
+docker compose --profile petstore run --rm newman-petstore   # 10 requests, 47 assertions
 ```
+
+Part 1 needs only an aauth-go checkout. Part 2 also needs a petstore checkout; skip it to test with the sandbox's own resources.
 
 A passing run reports `0` failed. This is the baseline: if it fails, fix the setup before testing anything of your own.
 
 Two checks that the baseline is healthy:
 
 ```bash
-docker compose ps                                                     # sandbox and petstore: healthy
+docker compose --profile petstore ps                                 # sandbox and petstore: healthy
 docker compose exec sandbox aauth-sandbox trace --state /state | head # the message trace
 ```
 
@@ -52,7 +55,7 @@ ANTHROPIC_API_KEY=... docker compose --profile omniagent run --rm -T omniagent \
 
 Expect `Enrolled as aauth:assistant@ap.aauth.test`, then `Approval needed. Open …` and the order result. Notes for agents running this:
 
-- Check pet ids first: `GET /v2/pet/findByStatus?status=available`. A sold pet is gone until the Petstore restarts (`docker compose up -d --force-recreate petstore`).
+- Check pet ids first: `GET /v2/pet/findByStatus?status=available`. A sold pet is gone until the Petstore restarts; recreate the sandbox with it (`docker compose --profile petstore up -d --wait --force-recreate sandbox petstore`), see Troubleshooting.
 - The model decides what to call. If it asks for confirmation or searches by a tag that matches nothing, state the tool and arguments, as above. That is the model, not AAuth.
 - Judge success from the trace, not from the model's wording: the order request shows 200 and the person-server `/token` exchange shows 202 then 200.
 
@@ -64,7 +67,8 @@ Expect `Enrolled as aauth:assistant@ap.aauth.test`, then `Approval needed. Open 
 | `connection refused` to `ap.aauth.test:443` from a container | The sandbox listens on loopback only (an overriding `command` without `--listen-any-interface`) | Use this repository's `compose.yaml`, or add `--listen 0.0.0.0:443 --listen-any-interface` |
 | `421 Misdirected Request` from the signing helper | The helper answers only loopback names | Add `--signer-host <service-name>` for the name your client uses |
 | `x509: certificate signed by unknown authority` | The client does not trust the sandbox CA | Point it at `/state/ca.pem`, or export it with `aauth-sandbox ca export` |
-| Order fails after a previous run | The pet was sold | `docker compose up -d --force-recreate petstore` |
+| Order fails after a previous run | The pet was sold | Recreate the sandbox and the Petstore together: `docker compose --profile petstore up -d --wait --force-recreate sandbox petstore` |
+| `invalid_resource_token` ("no key … in JWKS of https://petstore.aauth.test") after restarting the Petstore | The Petstore creates a new signing key at each start, and the person server keeps the key it saw | Recreate the sandbox together with the Petstore, as above |
 | Old CA after rebuilding | The state volume held a CA from an older sandbox | `docker compose down -v`, then start again, and trust the new CA |
 
 ## Clean Up

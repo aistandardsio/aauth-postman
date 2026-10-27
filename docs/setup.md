@@ -14,6 +14,8 @@ Every sandbox option is in the [aauth-go sandbox guide](https://aauth-dev.github
 
 The sandbox is built from a sibling aauth-go checkout (`AAUTH_GO_DIR`, default `../../aauth-dev/aauth-go`) until its image is published. `SIGNER_PORT` changes the helper's host port (default 8099), and `SANDBOX_HTTPS_PORT` the roles' (default 443). Both are published on `127.0.0.1` only.
 
+The Petstore is a second part: add it with `docker compose --profile petstore up -d --build --wait` and run its collection with `docker compose --profile petstore run --rm newman-petstore`. See the [interop runbook](interop.md).
+
 Postman needs only the helper: import the collection and the sandbox environment, set `signer_url` if you changed the port, and run. The steps below are for running the sandbox without Docker, or for talking to the roles directly from a browser.
 
 ## 1. Name the Servers
