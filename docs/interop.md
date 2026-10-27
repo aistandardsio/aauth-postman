@@ -59,6 +59,18 @@ Expect `Enrolled as aauth:assistant@ap.aauth.test`, then `Approval needed. Open 
 - The model decides what to call. If it asks for confirmation or searches by a tag that matches nothing, state the tool and arguments, as above. That is the model, not AAuth.
 - Judge success from the trace, not from the model's wording: the order request shows 200 and the person-server `/token` exchange shows 202 then 200.
 
+## See a Run in the Walkthrough
+
+`make demo` (Newman) or `make demo-omniagent` (omniagent) runs the Petstore order flow and writes `demo/live.html`, the AAuth walkthrough with the run's messages beside each step. It is the quickest way to compare your agent's messages with the protocol's: recreate the sandbox and the Petstore, run your agent against them, then turn the sandbox's trace into the page:
+
+```bash
+docker compose --profile petstore up -d --wait --force-recreate sandbox petstore
+# ...run your agent...
+make demo-page
+```
+
+A step marked "Not seen" is one your run did not perform; an exchange marked "Not a step in the document" is one it made that the protocol does not describe. "Weak match" means only the participants and method agreed. A match means the message looked like the step, not that it was valid.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

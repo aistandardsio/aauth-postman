@@ -57,6 +57,19 @@ docker compose exec sandbox aauth-sandbox trace --state /state
 
 The omniagent container also needs an omniagent checkout at `../../plexusone/omniagent`, until its image is published. Set `AAUTH_GO_DIR`, `PETSTORE_DIR` or `OMNIAGENT_DIR` if a checkout is elsewhere.
 
+## See Your Run Beside the Protocol
+
+`make demo` runs the Petstore order flow against fresh servers, captures the sandbox's trace of every message, and writes `demo/live.html`: the [AAuth walkthrough](https://github.com/aistandardsio/agent-protocols) with this run's messages beside each step. Open it in a browser; it needs no server.
+
+```bash
+make demo             # Newman plays the agent
+make demo-omniagent   # omniagent plays the agent; needs ANTHROPIC_API_KEY (or another model's key)
+```
+
+Each scenario the run performed appears as an "Observed" entry. Its steps show the real request and response, each token decoded (but not verified) with raw values masked, when each message happened, and the exchanges the protocol does not describe, such as servers fetching each other's keys, between the steps they fell between. A Concept / Observed switch shows the document's example instead. The run is matched to the steps by [pidl](https://github.com/grokify/pidl) with the binding in `bindings/sandbox-petstore.binding.json`.
+
+Until pidl v0.10.0 is released, the targets run pidl from a checkout at `../../grokify/pidl` (`PIDL_DIR`), and read the AAuth document from an agent-protocols checkout at `../../aistandardsio/agent-protocols` (`AAUTH_DOC`). `demo/` holds the raw trace, with real development tokens, and is not committed.
+
 ## Exploring Without Running Anything
 
 Import the mock collection and create a Postman mock server from it. Each request returns the example response from the AAuth walkthrough. The mock mode signs nothing and checks nothing; it is for reading the flows.
