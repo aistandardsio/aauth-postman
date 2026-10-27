@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "ffa3e2b8-ca75-585c-8896-d4a73810b173",
     "name": "AAuth",
-    "description": "AAuth agent authorization (draft-hardt-oauth-aauth-protocol-11): five resource access modes, from agent identity to federated authorization, with shared fragments for obtaining agent and person tokens and for user consent.",
+    "description": "AAuth agent authorization (draft-hardt-oauth-aauth-protocol-11) as the aauth-go sandbox's demo resources perform it: the five resource access modes. The sandbox's resources publish an authorization endpoint rather than challenge on the API call, so the challenge variant is left out; the Petstore collection covers it.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
