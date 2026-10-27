@@ -6,6 +6,9 @@ newman/
 # Sandbox state (CA private key, role keys)
 .aauth-sandbox/
 
+# Demo output: a raw trace with real development tokens
+demo/
+
 # Editors and OS
 .DS_Store
 .idea/

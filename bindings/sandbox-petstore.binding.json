@@ -1,0 +1,21 @@
+{
+  "format": "pidl-binding/v1",
+  "participants": {
+    "agent": {"labels": ["agent"]},
+    "ap": {"labels": ["ap"], "hosts": ["ap.aauth.test"]},
+    "ps": {"labels": ["ps"], "hosts": ["ps.aauth.test"]},
+    "resource": {"labels": ["petstore.aauth.test"], "hosts": ["petstore.aauth.test"]}
+  },
+  "labelsByPath": [
+    {"label": "client", "path": "^/(\\.well-known/.*|jwks\\.json)$", "participant": "resource"}
+  ],
+  "paths": {
+    "resource": {"agent-identity/request": "/v2/pet/findByStatus"}
+  },
+  "steps": {
+    "agent-token/attest": {"match": {"path": "^/(agent-token|enroll)$"}},
+    "ps-authorization-challenge/request": {"match": {"method": "POST", "path": "/v2/store/order", "status": 401}},
+    "ps-authorization-challenge/request-person": {"match": {"method": "POST", "path": "/v2/store/order", "status": 401}},
+    "*/api-request": {"match": {"method": "POST", "path": "/v2/store/order", "status": 200}}
+  }
+}
