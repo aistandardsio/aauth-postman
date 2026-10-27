@@ -47,6 +47,8 @@ nav:
     - Running Against the Sandbox: guides/setup.md
     - The Petstore Demos: guides/petstore.md
     - Interop Testing: guides/interop.md
+  - Releases:
+    - v0.1.0: releases/v0.1.0.md
 
 extra:
   social:

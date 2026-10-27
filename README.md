@@ -16,7 +16,7 @@ Postman collections for [AAuth](https://datatracker.ietf.org/doc/draft-hardt-oau
 | `environments/` | Generated environments: the sandbox, the Petstore behind it, and a Postman mock server |
 | `pidl/` | The documents the collections are generated from: what the sandbox's resources and the Petstore perform, each extending the AAuth document |
 | `bindings/` | How the sandbox and the Petstore map to the AAuth document's roles, for comparing a run with it |
-| `docs/` | The documentation site, published at [aistandards.io/aauth-postman](https://aistandards.io/aauth-postman/): [guides](docs/guides/) |
+| `docs/` | The documentation site, published at [aistandards.io/aauth-postman](https://aistandards.io/aauth-postman/): [guides](docs/guides/) and [release notes](docs/releases/) |
 
 ## Quick Start
 
