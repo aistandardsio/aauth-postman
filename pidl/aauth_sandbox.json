@@ -1,0 +1,21 @@
+{
+  "protocol": {
+    "id": "aauth-protocol",
+    "name": "AAuth",
+    "version": "draft-11",
+    "description": "AAuth agent authorization (draft-hardt-oauth-aauth-protocol-11) as the aauth-go sandbox's demo resources perform it: the five resource access modes. The sandbox's resources publish an authorization endpoint rather than challenge on the API call, so the challenge variant is left out; the Petstore collection covers it.",
+    "category": "agent",
+    "references": [
+      {
+        "name": "draft-hardt-oauth-aauth-protocol-11",
+        "url": "https://datatracker.ietf.org/doc/draft-hardt-oauth-aauth-protocol/11/"
+      }
+    ]
+  },
+  "extends": {
+    "path": "aauth_protocol.json",
+    "exclude_scenarios": [
+      "ps-authorization-challenge"
+    ]
+  }
+}
